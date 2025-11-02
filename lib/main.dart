@@ -19,6 +19,7 @@ const _supabaseKeyFromDefine = String.fromEnvironment(
   'SUPABASE_KEY',
   defaultValue: '',
 );
+const _passwordResetRedirectUri = 'com.jomarket.app://password-reset';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +108,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   Session? _session;
   late final StreamSubscription<AuthState> _authSubscription;
+  bool _handlingPasswordRecovery = false;
 
   @override
   void initState() {
@@ -114,6 +116,9 @@ class _AuthGateState extends State<AuthGate> {
     final auth = Supabase.instance.client.auth;
     _session = auth.currentSession;
     _authSubscription = auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        _handlePasswordRecovery();
+      }
       setState(() {
         _session = data.session;
       });
@@ -124,6 +129,30 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() {
     _authSubscription.cancel();
     super.dispose();
+  }
+
+  Future<void> _handlePasswordRecovery() async {
+    if (_handlingPasswordRecovery || !mounted) {
+      return;
+    }
+
+    _handlingPasswordRecovery = true;
+
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const _PasswordUpdateDialog(),
+      );
+
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password updated successfully.')),
+        );
+      }
+    } finally {
+      _handlingPasswordRecovery = false;
+    }
   }
 
   @override
@@ -207,12 +236,11 @@ class _AuthFormState extends State<AuthForm> {
         _errorMessage = 'Unexpected error. Please try again.';
       });
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
       }
-      setState(() {
-        _loading = false;
-      });
     }
   }
 
@@ -221,6 +249,20 @@ class _AuthFormState extends State<AuthForm> {
       _mode = _mode == _AuthMode.signIn ? _AuthMode.signUp : _AuthMode.signIn;
       _errorMessage = null;
     });
+  }
+
+  Future<void> _openPasswordResetDialog() async {
+    final initialEmail = _emailController.text.trim();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => _PasswordResetDialog(initialEmail: initialEmail),
+    );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Check your email for the reset link.')),
+      );
+    }
   }
 
   @override
@@ -289,6 +331,16 @@ class _AuthFormState extends State<AuthForm> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  if (_mode == _AuthMode.signIn) ...[
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _loading ? null : _openPasswordResetDialog,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (_errorMessage != null) ...[
                     Text(
                       _errorMessage!,
@@ -319,6 +371,282 @@ class _AuthFormState extends State<AuthForm> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog({required this.initialEmail});
+
+  final String initialEmail;
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _emailController;
+  bool _submitting = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        _emailController.text.trim(),
+        redirectTo: _passwordResetRedirectUri,
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } on AuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = 'Password reset failed. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset password'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Enter the email associated with your account and we\'ll send a reset link.',
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _emailController,
+              enabled: !_submitting,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Enter your email';
+                }
+                if (!value.contains('@')) {
+                  return 'Enter a valid email';
+                }
+                return null;
+              },
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting
+              ? null
+              : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send reset link'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasswordUpdateDialog extends StatefulWidget {
+  const _PasswordUpdateDialog();
+
+  @override
+  State<_PasswordUpdateDialog> createState() => _PasswordUpdateDialogState();
+}
+
+class _PasswordUpdateDialogState extends State<_PasswordUpdateDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _submitting = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: _passwordController.text),
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } on AuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = 'Could not update password. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Choose a new password'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Enter a new password for your account.'),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              enabled: !_submitting,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'New password',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Enter a new password';
+                }
+                if (value.length < 6) {
+                  return 'Password must be at least 6 characters';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _confirmPasswordController,
+              enabled: !_submitting,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirm password',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Confirm your password';
+                }
+                if (value != _passwordController.text) {
+                  return 'Passwords do not match';
+                }
+                return null;
+              },
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting
+              ? null
+              : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Update password'),
+        ),
+      ],
     );
   }
 }
@@ -361,12 +689,11 @@ class _AccountPageState extends State<AccountPage> {
         const SnackBar(content: Text('Sign out failed. Please try again.')),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _signingOut = false;
+        });
       }
-      setState(() {
-        _signingOut = false;
-      });
     }
   }
 

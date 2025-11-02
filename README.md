@@ -48,3 +48,10 @@ Notes:
 - The app will throw and refuse to start if no `SUPABASE_KEY` is provided.
 - For CI, store the anon key in your CI secrets and pass it with `--dart-define`.
 
+### Password recovery redirect configuration
+
+The reset-password email needs to deep-link back into the mobile app so the user can pick a new password. Add the following items to your Supabase project:
+
+- In **Authentication → URL Configuration**, add `com.jomarket.app://password-reset` to **Redirect URLs**.
+- If you use a different bundle ID / app scheme in production, update the value in `lib/main.dart`, `android/app/src/main/AndroidManifest.xml`, and `ios/Runner/Info.plist` to match.
+
