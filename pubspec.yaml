@@ -34,6 +34,10 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  # Supabase client for Flutter (provides Supabase.initialize and helpers)
+  supabase_flutter: ^1.4.0
+  # Load local environment variables during development (do NOT commit .env)
+  flutter_dotenv: ^5.0.2
 
 dev_dependencies:
   flutter_test:
@@ -87,3 +91,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+dependency_overrides:
+  # Force newer sign_in_with_apple packages to avoid old Android embedding
+  sign_in_with_apple: ^7.0.1
+  sign_in_with_apple_platform_interface: ^2.0.0
+  sign_in_with_apple_web: ^3.0.0

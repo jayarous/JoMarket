@@ -1,6 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() {
+// Default Supabase URL (kept in source because it's not secret). You may
+// replace this with an env var too if you need multiple environments.
+const _defaultSupabaseUrl = 'https://qjwnudofsiznvfcgzwuv.supabase.co';
+
+// Prefer compile-time overrides via --dart-define but fall back to a local
+// .env file (loaded by flutter_dotenv) so developers can set a private
+// .env during development. This keeps secrets out of the repo.
+const _supabaseUrlFromDefine = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: '',
+);
+const _supabaseKeyFromDefine = String.fromEnvironment(
+  'SUPABASE_KEY',
+  defaultValue: '',
+);
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load .env if present. This is optional — if you prefer not to use a
+  // local .env file, simply provide the key with --dart-define instead.
+  await dotenv.load();
+
+  final supabaseUrl = _supabaseUrlFromDefine.isNotEmpty
+      ? _supabaseUrlFromDefine
+      : (dotenv.env['SUPABASE_URL'] ?? _defaultSupabaseUrl);
+
+  final supabaseKey = _supabaseKeyFromDefine.isNotEmpty
+      ? _supabaseKeyFromDefine
+      : (dotenv.env['SUPABASE_KEY'] ?? '');
+
+  if (supabaseKey.isEmpty) {
+    // Fail early so the developer knows to provide the key.
+    throw Exception(
+      'SUPABASE_KEY is not defined. Provide it using one of the following:\n'
+      '  - flutter run --dart-define=SUPABASE_KEY="your_anon_key_here"\n'
+      '  - set SUPABASE_KEY in your environment and use the VS Code launch config (see README)\n'
+      '  - create a local .env file with SUPABASE_KEY and optionally SUPABASE_URL (see .env.example)',
+    );
+  }
+
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+
+  // Helpful debug-only log to confirm initialization at runtime.
+  // Runs only in debug mode and avoids printing secrets.
+  // Example output (debug only): "Supabase initialized at https://...supabase.co"
+  assert(() {
+    debugPrint('Supabase initialized at $supabaseUrl');
+    return true;
+  }());
+
   runApp(const MyApp());
 }
 
