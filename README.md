@@ -52,6 +52,15 @@ Notes:
 
 The reset-password email needs to deep-link back into the mobile app so the user can pick a new password. Add the following items to your Supabase project:
 
-- In **Authentication → URL Configuration**, add `com.jomarket.app://password-reset` to **Redirect URLs**.
+- In **Authentication -> URL Configuration**, add `com.jomarket.app://password-reset` to **Redirect URLs**.
 - If you use a different bundle ID / app scheme in production, update the value in `lib/main.dart`, `android/app/src/main/AndroidManifest.xml`, and `ios/Runner/Info.plist` to match.
+
+### Google Sign-In (Android)
+
+1. Confirm your Android application ID in `android/app/build.gradle.kts` (now `com.jomarket.app`) and keep it handy for Google Cloud.
+2. Generate SHA-1 and SHA-256 fingerprints for the keystore you will ship with (debug or release): run `cd android` followed by `./gradlew signingReport`.
+3. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID of type **Android** using the package name and fingerprints, and note the resulting client ID.
+4. In Supabase Dashboard -> Authentication -> Providers -> Google, enable Google and paste the Android client ID. The client secret field can remain empty for Android.
+5. Still in Supabase Dashboard -> Authentication -> URL Configuration, add `com.jomarket.app://auth-callback` to the redirect list.
+6. If you change the scheme or host, update `_googleOAuthRedirectUri` in `lib/main.dart` and the matching `<intent-filter>` in `android/app/src/main/AndroidManifest.xml`.
 

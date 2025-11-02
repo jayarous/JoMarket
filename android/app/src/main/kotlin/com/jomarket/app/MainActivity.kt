@@ -1,4 +1,4 @@
-package com.example.JoMarket.jo_market
+package com.jomarket.app
 
 import io.flutter.embedding.android.FlutterActivity
 

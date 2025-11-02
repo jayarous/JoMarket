@@ -20,6 +20,7 @@ const _supabaseKeyFromDefine = String.fromEnvironment(
   defaultValue: '',
 );
 const _passwordResetRedirectUri = 'com.jomarket.app://password-reset';
+const _googleOAuthRedirectUri = 'com.jomarket.app://auth-callback';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -180,6 +181,7 @@ class _AuthFormState extends State<AuthForm> {
 
   _AuthMode _mode = _AuthMode.signIn;
   bool _loading = false;
+  bool _oauthLoading = false;
   String? _errorMessage;
 
   @override
@@ -244,6 +246,47 @@ class _AuthFormState extends State<AuthForm> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    if (_loading || _oauthLoading) {
+      return;
+    }
+
+    setState(() {
+      _oauthLoading = true;
+      _errorMessage = null;
+    });
+
+    final auth = Supabase.instance.client.auth;
+
+    try {
+      await auth.signInWithOAuth(
+        Provider.google,
+        redirectTo: _googleOAuthRedirectUri,
+      );
+    } on AuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = 'Google sign in failed. Please try again.';
+      });
+    } finally {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _oauthLoading = false;
+      });
+    }
+  }
+
   void _toggleMode() {
     setState(() {
       _mode = _mode == _AuthMode.signIn ? _AuthMode.signUp : _AuthMode.signIn;
@@ -274,6 +317,10 @@ class _AuthFormState extends State<AuthForm> {
     final toggleLabel = _mode == _AuthMode.signIn
         ? 'Need an account? Sign up'
         : 'Already have an account? Sign in';
+    final busy = _loading || _oauthLoading;
+    final emailSectionLabel = _mode == _AuthMode.signIn
+        ? 'or sign in with email'
+        : 'or sign up with email';
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -289,15 +336,53 @@ class _AuthFormState extends State<AuthForm> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Supabase email authentication',
+                    'Supabase authentication',
                     style: Theme.of(context).textTheme.titleMedium,
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton(
+                    onPressed: busy ? null : _signInWithGoogle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_oauthLoading)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            const Icon(Icons.login, size: 24),
+                          const SizedBox(width: 12),
+                          const Text('Continue with Google'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          emailSectionLabel,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     autofocus: true,
+                    enabled: !busy,
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       border: OutlineInputBorder(),
@@ -316,6 +401,7 @@ class _AuthFormState extends State<AuthForm> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
+                    enabled: !busy,
                     decoration: const InputDecoration(
                       labelText: 'Password',
                       border: OutlineInputBorder(),
@@ -335,7 +421,7 @@ class _AuthFormState extends State<AuthForm> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: _loading ? null : _openPasswordResetDialog,
+                        onPressed: busy ? null : _openPasswordResetDialog,
                         child: const Text('Forgot password?'),
                       ),
                     ),
@@ -352,7 +438,7 @@ class _AuthFormState extends State<AuthForm> {
                     const SizedBox(height: 16),
                   ],
                   FilledButton(
-                    onPressed: _loading ? null : _submit,
+                    onPressed: busy ? null : _submit,
                     child: _loading
                         ? const SizedBox(
                             width: 20,
@@ -362,7 +448,7 @@ class _AuthFormState extends State<AuthForm> {
                         : Text(submitLabel),
                   ),
                   TextButton(
-                    onPressed: _loading ? null : _toggleMode,
+                    onPressed: busy ? null : _toggleMode,
                     child: Text(toggleLabel),
                   ),
                 ],
