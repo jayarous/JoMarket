@@ -37,6 +37,15 @@ Future<void> main() async {
       ? _supabaseKeyFromDefine
       : (dotenv.env['SUPABASE_KEY'] ?? '');
 
+  // Debugging helper (debug-only): print a masked prefix and length so we can
+  // confirm the app loaded the expected env value without leaking the secret.
+  assert(() {
+    String mask(String s) =>
+        s.length > 8 ? '${s.substring(0, 8)}... (${s.length})' : s;
+    debugPrint('Loaded SUPABASE_KEY: ${mask(supabaseKey)}');
+    return true;
+  }());
+
   if (supabaseKey.isEmpty) {
     // Fail early so the developer knows to provide the key.
     throw Exception(

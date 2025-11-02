@@ -57,10 +57,12 @@ The reset-password email needs to deep-link back into the mobile app so the user
 
 ### Google Sign-In (Android)
 
-1. Confirm your Android application ID in `android/app/build.gradle.kts` (now `com.jomarket.app`) and keep it handy for Google Cloud.
-2. Generate SHA-1 and SHA-256 fingerprints for the keystore you will ship with (debug or release): run `cd android` followed by `./gradlew signingReport`.
-3. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID of type **Android** using the package name and fingerprints, and note the resulting client ID.
-4. In Supabase Dashboard -> Authentication -> Providers -> Google, enable Google and paste the Android client ID. The client secret field can remain empty for Android.
-5. Still in Supabase Dashboard -> Authentication -> URL Configuration, add `com.jomarket.app://auth-callback` to the redirect list.
-6. If you change the scheme or host, update `_googleOAuthRedirectUri` in `lib/main.dart` and the matching `<intent-filter>` in `android/app/src/main/AndroidManifest.xml`.
+1. Confirm your Android application ID in `android/app/build.gradle.kts` (now `com.jomarket.app`). If you ever change it, update the manifest, Kotlin package, and `_googleOAuthRedirectUri`.
+2. Install Android Studio (or a standalone JDK 17) so Gradle has Java available. Set `JAVA_HOME` to the bundled JDK path (for Android Studio it is typically `C:\Program Files\Android\Android Studio\jbr`) and add `%JAVA_HOME%\bin` to your `PATH`, then restart your terminal.
+3. Generate SHA-1 and SHA-256 fingerprints for the keystore you will ship with: run `cd android` followed by `./gradlew signingReport`. Copy the fingerprints shown under the `debug` variant (and repeat later for a release keystore).
+4. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID of type **Web application**. Add the redirect URI `https://qjwnudofsiznvfcgzwuv.supabase.co/auth/v1/callback`. Save the Web **Client ID** and **Client secret**.
+5. In the same project, create an OAuth client ID of type **Android** using package `com.jomarket.app` and the SHA-1 from step 3. Save the Android Client ID.
+6. In Supabase Dashboard -> Authentication -> Providers -> Google, enable the provider. In **Client IDs** paste both IDs separated by a comma (for example `web-client-id,android-client-id`). In **Client Secret** paste the Web client secret from step 4, then save.
+7. Supabase Dashboard -> Authentication -> URL Configuration: ensure both `com.jomarket.app://password-reset` and `com.jomarket.app://auth-callback` are listed.
+8. Run the app on an Android emulator or device (`flutter run`) and tap **Continue with Google** to verify the OAuth flow.
 
