@@ -6,6 +6,29 @@
 create extension if not exists "pgcrypto";
 create extension if not exists "uuid-ossp";
 
+-- =========================================================
+-- Preflight checks (Supabase-targeted)
+-- - Ensure Supabase Auth `auth.users` exists and warn if helper functions are missing.
+-- =========================================================
+do $$ begin
+  -- Ensure Supabase Auth users table exists (Supabase creates `auth.users` when Auth is enabled)
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'auth' and table_name = 'users'
+  ) then
+    raise exception 'Supabase auth.users table not found. Enable Supabase Auth or create auth.users before running this migration.';
+  end if;
+
+  -- Warn if auth.uid() helper is missing; Supabase normally provides this.
+  if not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on p.pronamespace = n.oid
+    where n.nspname = 'auth' and p.proname = 'uid'
+  ) then
+    raise notice 'auth.uid() function not found. RLS policies referencing auth.uid() may fail.';
+  end if;
+end $$;
+
 -- ---------- ENUMS ----------
 do $$ begin
   create type order_status as enum ('pending','confirmed','packed','shipped','delivered','cancelled','refunded');

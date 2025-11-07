@@ -1,0 +1,11 @@
+-- 99_run_full_migration_original.sql
+-- This file points you to the original intact migration file which remains in migrations/sql_migration.sql
+-- To run the full migration as a single unit, open and execute the original file located at:
+--   c:/Users/jayar/Desktop/JoMarket/migrations/sql_migration.sql
+-- If using psql locally you can run:
+--   \i 'c:/Users/jayar/Desktop/JoMarket/migrations/sql_migration.sql'
+-- Or paste the full contents into your Supabase SQL editor.
+
+-- NOTE: The numbered files in this directory are intended to be executed in ascending order
+-- after ensuring the `auth` schema (Supabase) exists and you are using a role with
+-- sufficient privileges (service_role or a DB superuser) to CREATE EXTENSION, FUNCTIONS and ENABLE RLS.

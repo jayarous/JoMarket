@@ -61,7 +61,7 @@ Future<void> main() async {
       'SUPABASE_KEY is not defined. Provide it using one of the following:\n'
       '  - flutter run --dart-define=SUPABASE_KEY="your_anon_key_here"\n'
       '  - set SUPABASE_KEY in your environment and use the VS Code launch config (see README)\n'
-      '  - create a local .env file with SUPABASE_KEY and optionally SUPABASE_URL (see .env.example)',
+      '  - create a local .env file with SUPABASE_KEY and optionally SUPABASE_URL (see env/.env.example)',
     );
   }
 

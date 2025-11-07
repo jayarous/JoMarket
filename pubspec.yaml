@@ -92,7 +92,12 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 dependency_overrides:
-  # Force newer sign_in_with_apple packages to avoid old Android embedding
+  # Force newer sign_in_with_apple packages to avoid old Android embedding.
+  # NOTE: these overrides were added to avoid compatibility problems caused by
+  # older versions of `sign_in_with_apple` that used the deprecated Android
+  # embedding. Keep these until upstream packages you depend on are updated to
+  # compatible releases. If you test Apple Sign-in on iOS and everything works
+  # without them, you can remove these overrides.
   sign_in_with_apple: ^7.0.1
   sign_in_with_apple_platform_interface: ^2.0.0
   sign_in_with_apple_web: ^3.0.0
