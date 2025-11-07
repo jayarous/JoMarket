@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,8 +21,15 @@ const _supabaseKeyFromDefine = String.fromEnvironment(
   'SUPABASE_KEY',
   defaultValue: '',
 );
-const _passwordResetRedirectUri = 'com.jomarket.app://password-reset';
-const _googleOAuthRedirectUri = 'com.jomarket.app://auth-callback';
+// Use web-friendly redirect URIs when running on the web. On mobile we keep
+// the existing app-scheme deep links.
+final String _passwordResetRedirectUri = kIsWeb
+    ? '${Uri.base.origin}/password-reset'
+    : 'com.jomarket.app://password-reset';
+
+final String _googleOAuthRedirectUri = kIsWeb
+    ? '${Uri.base.origin}/auth-callback'
+    : 'com.jomarket.app://auth-callback';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,7 +85,28 @@ Future<void> _loadLocalEnvIfPresent() async {
     if (!_looksLikeMissingEnv(exception)) {
       rethrow;
     }
-    debugPrint('No local .env file found; continuing without it.');
+    // flutter_dotenv couldn't find a .env via its normal lookup. Try to
+    // load the file manually from the asset bundle (this helps when running
+    // on Android or web debug where asset resolution may differ).
+    try {
+      final contents = await rootBundle.loadString('.env');
+      final lines = contents.split(RegExp(r"\r?\n"));
+      for (var line in lines) {
+        line = line.trim();
+        if (line.isEmpty || line.startsWith('#')) continue;
+        final idx = line.indexOf('=');
+        if (idx <= 0) continue;
+        final key = line.substring(0, idx).trim();
+        var value = line.substring(idx + 1).trim();
+        if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+          value = value.substring(1, value.length - 1);
+        }
+        dotenv.env[key] = value;
+      }
+      debugPrint('Loaded .env from assets into dotenv.');
+    } catch (_) {
+      debugPrint('No local .env file found; continuing without it.');
+    }
   } on Error catch (error, stackTrace) {
     if (!_looksLikeMissingEnv(error)) {
       Error.throwWithStackTrace(error, stackTrace);
@@ -268,10 +298,17 @@ class _AuthFormState extends State<AuthForm> {
     final auth = Supabase.instance.client.auth;
 
     try {
-      await auth.signInWithOAuth(
-        Provider.google,
-        redirectTo: _googleOAuthRedirectUri,
-      );
+      // On the web, let Supabase handle the redirect flow (omit redirectTo)
+      // so it can use the proper origin and callback. On mobile, pass the
+      // app-scheme deep link.
+      if (kIsWeb) {
+        await auth.signInWithOAuth(Provider.google);
+      } else {
+        await auth.signInWithOAuth(
+          Provider.google,
+          redirectTo: _googleOAuthRedirectUri,
+        );
+      }
     } on AuthException catch (error) {
       if (!mounted) {
         return;
@@ -287,12 +324,11 @@ class _AuthFormState extends State<AuthForm> {
         _errorMessage = 'Google sign in failed. Please try again.';
       });
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _oauthLoading = false;
+        });
       }
-      setState(() {
-        _oauthLoading = false;
-      });
     }
   }
 

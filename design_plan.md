@@ -1,15 +1,45 @@
 # JoMarket Multivendor E-commerce App Design Plan
 
+> Changelog (2025-11-04): Added "Introduction & Solo Development Approach" and "MVP vs Long-Term Feature Scope" sections from the updated design PDF; editorial rewrite for clarity and brevity (2025-11-04).
+> Changelog (2025-11-04): Added "Introduction & Solo Development Approach" and "MVP vs Long-Term Feature Scope" sections from the updated design PDF; editorial rewrite for clarity and brevity (2025-11-04).
+> Changelog (2025-11-04 - editorial): Full-document editorial pass for tone, length, and heading consistency. Minor clarifications and tightened paragraphs across architecture, scalability, security and roadmap sections.
+
+## Introduction & Solo Development Approach
+
+JoMarket is a mobile-first multivendor marketplace targeting Jordan. This document captures the core architecture, MVP scope, and a phased roadmap designed for a solo developer supported by AI tooling. The immediate goal is a lean, reliable MVP that focuses on buyer flows and essential seller tools; more advanced features follow in later phases.
+
+To stay efficient, development is iterative: prioritize features that deliver user value and enable meaningful feedback (search, product browsing, single-vendor checkout, basic seller operations). AI assistants will be used to accelerate routine work (boilerplate, tests, suggestions), while manual review, testing, and CI gates protect quality.
+
+Localization and regional fit are core requirements: bilingual (Arabic/English) UI with RTL support, Jordanian Dinar (JOD) pricing, and local payment options including Cash on Delivery (COD). Address capture and mapping will be adapted for regional norms (accept flexible address formats and optionally use map pins).
+
+## MVP vs Long-Term Feature Scope
+
+### MVP (Initial Release)
+
+- Buyer: Browse/search products, view details, add items from a single vendor to a cart, and complete a single-vendor checkout (online card or COD). Buyers receive order status updates and notifications.
+- Seller: Register, list/edit products (title, description, price, stock, images), view orders, and update order status. A compact sales summary is included.
+- Platform: Role-based access, Supabase-backed database and auth, modular Flutter codebase (ready to add deliverer and web modules), and full Arabic/English localization.
+
+### Long-Term Goals (phased)
+
+- Multi-vendor cart and backend order splitting with per-vendor shipments and distributed payouts.
+- Full-featured seller web dashboard: bulk imports, variant editor, richer analytics, and customer support tools.
+- Deliverer & logistics: courier workflows, GPS tracking, route optimization, proofs-of-delivery, and an optional standalone courier app.
+- Payments & payouts: marketplace payment integration (Stripe Connect or regional equivalent), automated payouts, dispute handling, and fraud detection.
+- Enhanced UX: AR previews, personalization, live seller tools (chat/streaming), and AI-driven recommendations and analytics.
+
+This focused MVP approach keeps the launch achievable while preserving expansion paths for growth and scale.
+
 ## 1. Overall App Architecture
 
-### App Structure
-JoMarket will launch as a single Flutter mobile app with role-based access for buyers, sellers, and deliverers. The mobile codebase will be organized into feature modules (core, buyer, seller-lite, deliverer) that share a common design system and infrastructure layer.
+### App structure
+JoMarket starts as a single, modular Flutter app (iOS/Android) with role-based UI for buyers, sellers and — later — deliverers. The codebase is split into feature modules (core, buyer, seller-lite, deliverer) that share services and design tokens; modules load only when required to keep the runtime lightweight.
 
-- **Frontend**: Flutter (iOS/Android) with deferred loading so seller-lite and deliverer modules are only initialized when needed.
-- **Seller Companion Web**: Responsive Flutter Web (or React) dashboard for catalog management, analytics, bulk import/export, and customer support workflows that require larger screens.
-- **Deliverer Strategy**: Deliverer flows remain in the main app initially, isolated in a dedicated Flutter module with trimmed dependencies and hidden buyer assets; the module can later be built as a standalone lightweight courier app (for rugged devices or private MDM distribution) without rewriting shared logic.
-- **Backend**: Supabase for database, authentication, storage, and real-time features, augmented with Supabase Edge Functions and optional external workers for background jobs.
-- **Architecture Pattern**: MVVM with Repository abstraction, Provider (or Riverpod) for state management, and clearly defined domain models to keep UI, application logic, and data sources decoupled.
+- Frontend: Flutter mobile app with deferred module loading and a shared design system.
+- Seller companion (future): Responsive web dashboard (Flutter Web or React) for catalog management and analytics.
+- Deliverer strategy: Deliverer flows are isolated inside a module and can be extracted into a lightweight courier build later.
+- Backend: Supabase (Postgres, Auth, Storage, Edge Functions) as the primary backend; optional external workers for heavy jobs.
+- Architecture: MVVM with a repository layer and Provider/Riverpod for state management; ViewModels remain small and testable.
 
 ### Core Components
 - **Authentication Module**: Role-based login with Supabase Auth, multi-factor support, and contextual onboarding (buyer, seller, deliverer).
@@ -38,12 +68,12 @@ JoMarket will launch as a single Flutter mobile app with role-based access for b
 
 Row Level Security (RLS) will be enforced per table with policies scoped by role, ownership, and order/vendor relationships. Soft deletes and archival timestamps prevent accidental data loss while preserving history. Event sourcing (via append-only tables and Supabase Functions) tracks order/payment lifecycle changes for reconciliation.
 
-### Backend Integration
-- Supabase Auth for user management with links to Stripe accounts.
-- Supabase Postgres for primary data, real-time subscriptions for live updates, and logical replication (if scaling to read replicas).
-- Supabase Storage for images/media with CDN-backed delivery and automatic resizing pipelines.
-- Supabase Edge Functions plus scheduled jobs for payment webhooks, settlement runs, notification fan-out, SLA checks, and report generation.
-- Task queue (e.g., Supabase Queue/pg-boss or external worker) for retryable background processing (failed webhooks, KYC verification, invoice generation).
+### Backend integration
+- Supabase Auth for authentication and role claims, with optional links to payment providers.
+- Postgres (via Supabase) as the primary datastore with real-time subscriptions and optional read replicas.
+- Supabase Storage for media (CDN-backed) and optional automatic resizing pipelines.
+- Edge Functions and scheduled jobs for webhooks, settlements, notifications and scheduled tasks.
+- Worker queues for retryable or long-running processes (webhook retries, KYC, bulk imports).
 
 ## 2. Key Features
 
@@ -238,36 +268,36 @@ Single app with role-based UI/permissions is recommended for:
 ## 6. Scalability, Security, and Compliance
 
 ### Scalability
-- Layered caching: local/offline cache (Hive/Isar), Supabase row-level caching, CDN (Supabase Edge/Cloudflare) for media, and HTTP caching headers for catalogue endpoints.
-- Database performance: query optimization, composite indexes, connection pooling, read replicas, and partitioning (per vendor/region) for high-volume tables (`orders`, `order_events`).
-- Workload management: background workers for heavy jobs (settlements, reporting), rate limiting on public APIs, and job queues for webhook retries.
-- Modular build targets: ability to strip unused modules (deliverer-lite, seller-lite) to keep bundle size manageable and support separate builds later.
-- Horizontal scalability: containerized Supabase Edge Functions, stateless Flutter frontends, and infrastructure-as-code for reproducible environments.
+- Layered caching: local app cache (Hive/Isar), CDN for media, and HTTP caching to reduce load.
+- Database tuning: indexes, read replicas, partitioning and connection pooling for heavy tables (orders, events).
+- Offload heavy processing to workers and queues; rate-limit public APIs.
+- Keep builds modular so unused modules can be excluded for specific release targets.
+- Use IaC and containerized functions to scale Edge workloads horizontally.
 
 ### Security
-- Supabase RLS policies enforcing role-based access, ownership checks, and attribute-based restrictions; automated tests to prevent policy regressions.
-- Secrets management via environment configuration (`envied`) and rotation strategy for API keys, Stripe secrets, Shippo tokens, and service accounts.
-- Data protection: TLS everywhere, encryption at rest, per-field encryption for sensitive PII, and secure storage for documents using pre-signed URLs.
-- Secure coding practices: validation/sanitization, dependency vulnerability scanning, static analysis (Dart analyze, Snyk), and regular penetration tests.
-- Incident response: audit logging, anomaly detection, response runbooks, and least-privilege access controls for staff/admin tools.
+- Enforce Row-Level Security (RLS) in Postgres and include automated policy tests in CI.
+- Central secrets management with rotation (vault or CI secrets); avoid embedding credentials in code.
+- TLS in transit, encryption at rest, and never store raw card data—use payment provider tokenization.
+- Secure development: static analysis, dependency scanning, input validation, and periodic penetration testing.
+- Audit logging and incident runbooks; follow least-privilege access for staff/admin tools.
 
 ### Compliance
-- **GDPR/CCPA**: Data mapping inventory, explicit consent flows, preference center, data export/delete tooling, retention policies, and DPA with vendors.
-- **PCI DSS**: Stripe Connect keeps card data off-platform; ensure SAQ-A compliance, 3DS support (PSD2), tokenized storage of payment references, and segregated PCI scope.
-- **KYC/AML**: Stripe verification and manual review workflows for sellers, tracking beneficial ownership documents, and reporting suspicious activity.
-- **Tax/VAT**: Integration with tax calculation services (Stripe Tax or TaxJar), per-jurisdiction rates, and automated invoice generation with compliant numbering.
-- **Accessibility**: Conformance tracking to WCAG 2.1 AA, accessibility QA in release checklist.
+- GDPR/CCPA: consent capture, export/delete tooling, and vendor DPAs where required.
+- PCI: keep card data with providers (Stripe or a regional gateway), support 3DS, and follow SAQ-A guidance to reduce PCI scope.
+- KYC/AML: tiered seller verification with manual review fallbacks.
+- Tax: integrate tax calculation services and produce compliant invoices.
+- Accessibility: target WCAG 2.1 AA and include accessibility checks in releases.
 
-### Observability & Reliability
-- Monitoring stack: Sentry for crash/error tracking, Firebase Analytics for behavior, Supabase logs/metrics, and uptime alerts (Statuspage/PagerDuty).
-- Structured logging and tracing (OpenTelemetry) across mobile, edge functions, and third-party callbacks.
-- Service-level objectives with error budgets, automated health checks, and chaos testing for critical flows (payments, order updates).
-- Backup & recovery: automated database backups, DR drills, and storage versioning for media assets.
+### Observability & reliability
+- Centralize errors and telemetry (Sentry, Firebase/Amplitude) and export backend metrics for dashboards and alerts.
+- Use structured logs and distributed tracing (OpenTelemetry) to link mobile events to backend operations.
+- Define SLOs, automate health checks, and run periodic chaos/DR drills for critical flows.
+- Automate backups and media versioning for recoverability.
 
-### Abuse Prevention
-- Fraud detection heuristics (velocity rules, device fingerprinting via FingerprintJS), manual review queues, and integration with Stripe Radar.
-- Rate limiting for search, checkout, and vendor APIs; captcha or OTP for suspicious activity.
-- Content moderation pipeline for product listings, reviews, and media (automated scanning + human review).
+### Abuse prevention
+- Implement fraud rules (velocity checks, device signals) and integrate with gateway fraud tools where available.
+- Apply rate limits and protective controls (CAPTCHA, OTP) to risky endpoints.
+- Build a moderation pipeline combining automated scanning with human review for listings and reviews.
 
 ## 7. Third-Party Integrations
 
