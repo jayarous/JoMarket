@@ -24,7 +24,7 @@ Notes:
 [CmdletBinding()]
 param(
     [string]$ConnectionString,
-    [string]$Host,
+    [string]$DbHost,
     [int]$Port = 5432,
     [string]$User,
     [string]$Database,
@@ -40,7 +40,7 @@ Set-Location $scriptDir
 
 # Build base psql args
 if (-not $ConnectionString) {
-    if (-not $Host -or -not $User -or -not $Database) {
+    if (-not $DbHost -or -not $User -or -not $Database) {
         Write-Host "Connection details not provided. You can either set the PG_CONN environment variable (postgres://...) or pass -Host -User -Database (-Password optional)." -ForegroundColor Yellow
         $envConn = $env:PG_CONN
         if ($envConn) {
@@ -58,7 +58,7 @@ Write-Info "psql path: $PsqlPath"
 if ($ConnectionString) {
     $baseArgs = @($ConnectionString, '--set=ON_ERROR_STOP=on')
 } else {
-    $baseArgs = @('-h', $Host, '-p', [string]$Port, '-U', $User, '-d', $Database, '--set=ON_ERROR_STOP=on')
+    $baseArgs = @('-h', $DbHost, '-p', [string]$Port, '-U', $User, '-d', $Database, '--set=ON_ERROR_STOP=on')
 }
 
 # Gather top-level SQL files (exclude the policies directory and runner script)
