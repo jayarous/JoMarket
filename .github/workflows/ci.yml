@@ -48,8 +48,8 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           # Pin a concrete Flutter SDK release that includes a Dart SDK compatible
-          # with our pubspec (Dart >= 3.9.2). We'll try Flutter 4.0.0 first.
-          flutter-version: '4.0.0'
+          # with our pubspec (Dart >= 3.9.2). Flutter 3.35.x ships Dart 3.9.x.
+          flutter-version: '3.35.5'
 
       - name: Cache Pub
         uses: actions/cache@v4
