@@ -36,6 +36,9 @@ migrate_working_dir/
 # Local environment file (do NOT commit secrets)
 .env
 
+# Large local env assets
+env/postgresql-binaries.zip
+
 # Symbolication related
 app.*.symbols
 
