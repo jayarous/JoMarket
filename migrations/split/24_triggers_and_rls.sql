@@ -9,12 +9,56 @@ begin
   return new;
 end $$;
 
--- Attach updated_at triggers to tables that have updated_at columns (run after those tables exist)
--- Example for profiles (uncomment after creating table):
--- drop trigger if exists trg_profiles_set_updated_at on public.profiles;
--- create trigger trg_profiles_set_updated_at
--- before update on public.profiles
--- for each row execute function public.trigger_set_updated_at();
+-- Attach updated_at triggers to tables that have updated_at columns
+drop trigger if exists trg_profiles_set_updated_at on public.profiles;
+create trigger trg_profiles_set_updated_at
+before update on public.profiles
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_addresses_set_updated_at on public.addresses;
+create trigger trg_addresses_set_updated_at
+before update on public.addresses
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_vendors_set_updated_at on public.vendors;
+create trigger trg_vendors_set_updated_at
+before update on public.vendors
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_products_set_updated_at on public.products;
+create trigger trg_products_set_updated_at
+before update on public.products
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_product_variants_set_updated_at on public.product_variants;
+create trigger trg_product_variants_set_updated_at
+before update on public.product_variants
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_carts_set_updated_at on public.carts;
+create trigger trg_carts_set_updated_at
+before update on public.carts
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_orders_set_updated_at on public.orders;
+create trigger trg_orders_set_updated_at
+before update on public.orders
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_shipments_set_updated_at on public.shipments;
+create trigger trg_shipments_set_updated_at
+before update on public.shipments
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_delivery_providers_set_updated_at on public.delivery_providers;
+create trigger trg_delivery_providers_set_updated_at
+before update on public.delivery_providers
+for each row execute function public.trigger_set_updated_at();
+
+drop trigger if exists trg_payments_set_updated_at on public.payments;
+create trigger trg_payments_set_updated_at
+before update on public.payments
+for each row execute function public.trigger_set_updated_at();
 
 -- Enforce leaf category function
 create or replace function public.enforce_leaf_category()
@@ -27,6 +71,11 @@ begin
   end if;
   return new;
 end $$;
+
+drop trigger if exists trg_products_leaf_only on public.products;
+create trigger trg_products_leaf_only
+before insert or update on public.products
+for each row execute function public.enforce_leaf_category();
 
 -- Shipment creation functions (call after orders/order_items exist if you want to enable triggers)
 create or replace function public.create_vendor_shipments_for_order()
@@ -49,6 +98,33 @@ begin
   return new;
 end $$;
 
--- Note: triggers that reference these functions should be created after you verify your order behaviour and RLS policies.
+drop trigger if exists trg_orders_create_shipments on public.orders;
+create trigger trg_orders_create_shipments
+after update of status on public.orders
+for each row
+when (new.status = 'confirmed')
+execute function public.create_vendor_shipments_when_confirmed();
 
--- RLS enabling and policies should be applied after tables and functions exist. The original script contains many policies; consider copying them from the full migration when ready to apply.
+-- Enable row level security (mirrors the original consolidated migration)
+alter table public.profiles enable row level security;
+alter table public.addresses enable row level security;
+alter table public.carts enable row level security;
+alter table public.cart_items enable row level security;
+alter table public.favorites enable row level security;
+alter table public.vendors enable row level security;
+alter table public.vendor_staff enable row level security;
+alter table public.products enable row level security;
+alter table public.product_variants enable row level security;
+alter table public.product_images enable row level security;
+alter table public.orders enable row level security;
+alter table public.order_items enable row level security;
+alter table public.order_coupons enable row level security;
+alter table public.payments enable row level security;
+alter table public.delivery_providers enable row level security;
+alter table public.delivery_staff enable row level security;
+alter table public.shipments enable row level security;
+alter table public.delivery_assignments enable row level security;
+alter table public.reviews enable row level security;
+alter table public.user_roles enable row level security;
+alter table public.coupons enable row level security;
+alter table public.categories enable row level security;

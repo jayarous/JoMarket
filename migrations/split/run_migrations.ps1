@@ -17,7 +17,7 @@ Notes:
 - Requires `psql` (Postgres client) available in PATH.
 - The script stops on first failing SQL and returns a non-zero exit code.
 - It runs each top-level numbered SQL file in the current directory (e.g. `01_*.sql`, `02_*.sql`, ...),
-  and then attempts to run a matching policy file from the `policies` subdirectory (matching by logical name).
+  and then runs every policy file from `policies/` that shares the same numeric prefix (e.g. `11_*`).
 - For safety, the script sets PGPASSWORD in the environment when a password is provided.
 - psql is invoked with ON_ERROR_STOP enabled so psql aborts on SQL errors.
 #>
@@ -73,6 +73,8 @@ if ($tableFiles.Count -eq 0) {
 
 Write-Info "Found $($tableFiles.Count) SQL file(s) to run."
 
+$failedPolicies = @()
+
 foreach ($f in $tableFiles) {
     Write-Host "\n----- Running $($f.Name) -----" -ForegroundColor Green
     $filePath = $f.FullName
@@ -87,24 +89,34 @@ foreach ($f in $tableFiles) {
     }
     Write-Info "$($f.Name) completed successfully."
 
-    # Determine logical name (strip leading number_) and look for matching policy file
-    $logical = $f.BaseName -replace '^[0-9]+_',''
+    # Determine numeric prefix and run all matching policy files (e.g. 11_orders_*.sql)
+    $prefixMatch = [regex]::Match($f.BaseName, '^(?<prefix>[0-9]+)_')
+    if (-not $prefixMatch.Success) {
+        Write-Info "Skipping policy lookup for $($f.Name) because no numeric prefix was detected."
+        continue
+    }
+    $prefix = $prefixMatch.Groups['prefix'].Value
     $policiesDir = Join-Path $scriptDir 'policies'
     if (Test-Path $policiesDir) {
-        # Try to find a policy file that contains the logical name
-        $policy = Get-ChildItem -Path $policiesDir -Filter '*.sql' | Where-Object { $_.Name -match [regex]::Escape($logical) } | Sort-Object Name | Select-Object -First 1
-        if ($policy) {
-            Write-Host "-> Found policy file $($policy.Name) for $logical; running it now..." -ForegroundColor Cyan
-            $pArgs = @($baseArgs) + @('-f', $policy.FullName)
-            & $PsqlPath @pArgs
-            $prc = $LASTEXITCODE
-            if ($prc -ne 0) {
-                Write-Err "psql failed while running policy $($policy.Name) with exit code $prc. Aborting."
-                exit $prc
+        $policyFiles = Get-ChildItem -Path $policiesDir -Filter '*.sql' | Where-Object {
+            $_.BaseName -match "^$prefix`_"
+        } | Sort-Object Name
+
+        if ($policyFiles.Count -gt 0) {
+            foreach ($policy in $policyFiles) {
+                Write-Host "-> Running policy file $($policy.Name) (prefix $prefix)..." -ForegroundColor Cyan
+                $pArgs = @($baseArgs) + @('-f', $policy.FullName)
+                & $PsqlPath @pArgs
+                $prc = $LASTEXITCODE
+                if ($prc -ne 0) {
+                    Write-Err "psql failed while running policy $($policy.Name) with exit code $prc. Recording and continuing."
+                    $failedPolicies += $policy.FullName
+                } else {
+                    Write-Info "Policy $($policy.Name) applied successfully."
+                }
             }
-            Write-Info "Policy $($policy.Name) applied successfully."
         } else {
-            Write-Info "No policy file found for $logical; continuing."
+            Write-Info "No policy files found for prefix $prefix; continuing."
         }
     } else {
         Write-Info "Policies directory not found; skipping policy application."
@@ -125,6 +137,31 @@ if (Test-Path $triggersFile) {
     Write-Info "Triggers and RLS applied successfully."
 } else {
     Write-Info "No triggers/rls file found (expected: 24_triggers_and_rls.sql)."
+}
+
+# Retry any failed policy files once more now that all tables/triggers have been created.
+if ($failedPolicies.Count -gt 0) {
+    Write-Host "\nAttempting to re-run $($failedPolicies.Count) previously failed policy file(s) ..." -ForegroundColor Yellow
+    $stillFailed = @()
+    foreach ($pf in $failedPolicies) {
+        Write-Host "-> Retrying policy: $pf" -ForegroundColor Cyan
+        $pArgs = @($baseArgs) + @('-f', $pf)
+        & $PsqlPath @pArgs
+        $prc = $LASTEXITCODE
+        if ($prc -ne 0) {
+            Write-Err "Policy $pf still failed with exit code $prc."
+            $stillFailed += $pf
+        } else {
+            Write-Info "Policy $pf applied successfully on retry."
+        }
+    }
+
+    if ($stillFailed.Count -gt 0) {
+        Write-Err "The following policy files failed even after retry:"
+        $stillFailed | ForEach-Object { Write-Err " - $_" }
+        Write-Err "Aborting with non-zero exit to surface failing policies."
+        exit 3
+    }
 }
 
 Write-Host "\nAll done." -ForegroundColor Green

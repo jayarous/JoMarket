@@ -3,6 +3,10 @@
 -- WARNING: Policies reference `auth` objects (auth.users / auth.uid()).
 -- Ensure you only apply these on Supabase or after creating local `auth` stubs for testing.
 
+-- Drop existing policies if present so the file can be reapplied idempotently
+drop policy if exists "delivery_assignments_staff_read" on public.delivery_assignments;
+drop policy if exists "delivery_assignments_provider_manage" on public.delivery_assignments;
+
 create policy "delivery_assignments_staff_read" on public.delivery_assignments
 for select using (exists (select 1 from public.delivery_staff ds where ds.id = delivery_assignments.delivery_staff_id and ds.user_id = auth.uid()));
 create policy "delivery_assignments_provider_manage" on public.delivery_assignments

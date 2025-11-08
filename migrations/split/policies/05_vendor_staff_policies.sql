@@ -3,6 +3,10 @@
 -- WARNING: Policies reference `auth` objects (auth.users / auth.uid()).
 -- Ensure you only apply these on Supabase or after creating local `auth` stubs for testing.
 
+-- Drop existing policies if present so the file can be reapplied idempotently
+drop policy if exists "vendor_staff_self_read" on public.vendor_staff;
+drop policy if exists "vendor_staff_vendor_owner_manage" on public.vendor_staff;
+
 create policy "vendor_staff_self_read" on public.vendor_staff
 for select using (user_id = auth.uid());
 create policy "vendor_staff_vendor_owner_manage" on public.vendor_staff

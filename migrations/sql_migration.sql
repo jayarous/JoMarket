@@ -697,12 +697,33 @@ returns boolean language sql as $$
   );
 $$;
 
--- Safe FK additions for forward-referenced columns
-alter table if exists public.user_roles
-  add constraint if not exists fk_user_roles_vendor foreign key (vendor_id) references public.vendors(id) on delete cascade;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'fk_user_roles_vendor'
+      and conrelid = 'public.user_roles'::regclass
+  ) then
+    alter table public.user_roles
+      add constraint fk_user_roles_vendor
+      foreign key (vendor_id) references public.vendors(id) on delete cascade;
+  end if;
+end $$;
 
-alter table if exists public.addresses
-  add constraint if not exists fk_addresses_vendor foreign key (vendor_id) references public.vendors(id) on delete set null;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'fk_addresses_vendor'
+      and conrelid = 'public.addresses'::regclass
+  ) then
+    alter table public.addresses
+      add constraint fk_addresses_vendor
+      foreign key (vendor_id) references public.vendors(id) on delete set null;
+  end if;
+end $$;
 
 -- Indexes for newly added tables
 create index if not exists idx_transactions_type on public.transactions(type);

@@ -15,6 +15,9 @@ create table if not exists public.delivery_providers (
 -- optional linkage: addresses can be tied to a provider (service area/warehouse)
 -- This migration originally altered addresses to add delivery_provider_id; if running per-table, run this ALTER after addresses exists.
 
+-- If addresses should be linked to delivery providers, add the column here (idempotent).
+alter table public.addresses add column if not exists delivery_provider_id uuid null references public.delivery_providers(id) on delete set null;
+
 create table if not exists public.delivery_staff (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,

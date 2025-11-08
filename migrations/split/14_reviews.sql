@@ -20,16 +20,29 @@ create table if not exists public.reviews (
   created_at timestamptz not null default now()
 );
 
-alter table public.reviews add constraint reviews_subject_match_chk
-check (
-  (subject='product'  and product_id  is not null and vendor_id is null and delivery_staff_id is null and delivery_provider_id is null and platform is null and app_version is null)
-  or
-  (subject='vendor'   and vendor_id   is not null and product_id is null and delivery_staff_id is null and delivery_provider_id is null and platform is null and app_version is null)
-  or
-  (subject='delivery' and (delivery_staff_id is not null or delivery_provider_id is not null) and product_id is null and vendor_id is null and platform is null and app_version is null)
-  or
-  (subject='app'      and platform is not null and product_id is null and vendor_id is null and delivery_staff_id is null and delivery_provider_id is null)
-);
+DO $$
+BEGIN
+  -- Add the constraint only if it doesn't already exist (idempotent)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    JOIN pg_namespace n ON t.relnamespace = n.oid
+    WHERE c.conname = 'reviews_subject_match_chk' AND n.nspname = 'public' AND t.relname = 'reviews'
+  ) THEN
+    EXECUTE $sql$
+      ALTER TABLE public.reviews ADD CONSTRAINT reviews_subject_match_chk
+      CHECK (
+        (subject='product'  and product_id  is not null and vendor_id is null and delivery_staff_id is null and delivery_provider_id is null and platform is null and app_version is null)
+        or
+        (subject='vendor'   and vendor_id   is not null and product_id is null and delivery_staff_id is null and delivery_provider_id is null and platform is null and app_version is null)
+        or
+        (subject='delivery' and (delivery_staff_id is not null or delivery_provider_id is not null) and product_id is null and vendor_id is null and platform is null and app_version is null)
+        or
+        (subject='app'      and platform is not null and product_id is null and vendor_id is null and delivery_staff_id is null and delivery_provider_id is null)
+      );
+    $sql$;
+  END IF;
+END$$;
 
 create unique index if not exists uq_reviews_user_product
   on public.reviews(user_id, product_id) where product_id is not null;

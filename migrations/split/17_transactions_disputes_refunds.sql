@@ -1,4 +1,4 @@
--- 18_transactions_disputes_refunds.sql
+-- 17_transactions_disputes_refunds.sql
 -- Transactions
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),

@@ -8,6 +8,8 @@ create table if not exists public.product_images (
   created_at timestamptz not null default now()
 );
 
+-- Ensure policy can be reapplied idempotently
+drop policy if exists "images_public_read" on public.product_images;
 create policy "images_public_read" on public.product_images
 for select using (true);
 

@@ -3,6 +3,12 @@
 -- WARNING: Policies reference `auth` objects (auth.users / auth.uid()).
 -- Ensure you only apply these on Supabase or after creating local `auth` stubs for testing.
 
+-- Drop existing policies if present so the file can be reapplied idempotently
+drop policy if exists "shipments_order_owner_read" on public.shipments;
+drop policy if exists "shipments_vendor_manage" on public.shipments;
+drop policy if exists "shipments_marketplace_read" on public.shipments;
+drop policy if exists "shipments_courier_manage" on public.shipments;
+
 create policy "shipments_order_owner_read" on public.shipments
 for select using (exists (select 1 from public.orders o where o.id = shipments.order_id and o.user_id = auth.uid()));
 

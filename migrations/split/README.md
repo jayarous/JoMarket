@@ -26,9 +26,12 @@ Run each table file, then its corresponding policy file (when present). Policies
 9. 09_coupons.sql
    - policies/09_coupons_policies.sql
 10. 10_carts_and_cart_items_and_favorites.sql
-   - policies/10_order_items_policies.sql (applies to order_items in step 11)
+   - policies/10_carts_policies.sql
+   - policies/10_cart_items_policies.sql
+   - policies/10_favorites_policies.sql
 11. 11_orders_and_items_and_coupons.sql
    - policies/11_orders_policies.sql
+   - policies/11_order_items_policies.sql
    - policies/11_order_coupons_policies.sql
 12. 12_payments.sql
    - policies/12_payments_policies.sql
@@ -41,8 +44,8 @@ Run each table file, then its corresponding policy file (when present). Policies
    - policies/14_reviews_policies.sql
 15. 15_vendor_documents_warehouses_inventory_restock.sql
 16. 16_order_events_and_support.sql
-17. 17_payouts.sql
-18. 18_transactions_disputes_refunds.sql
+17. 17_transactions_disputes_refunds.sql
+18. 18_payouts.sql
 19. 19_audit_logs.sql
 20. 20_device_tokens.sql
 21. 21_notifications.sql
@@ -54,8 +57,9 @@ Run each table file, then its corresponding policy file (when present). Policies
 Notes
 - Many tables reference `auth.users` and use `auth.uid()` inside RLS policies: this is specific to Supabase. Ensure Supabase Auth exists before running.
 - Run the scripts using a privileged role (service_role or DB superuser) because CREATE EXTENSION and CREATE FUNCTION require elevated privileges.
-- After running the table scripts, review and run the RLS/policies segment (24_triggers_and_rls.sql or the policies in the original migration) while logged in as the privileged role.
+- `24_triggers_and_rls.sql` now mirrors the full migration by enabling RLS on every table; run it after the numbered tables (and again after policies if needed).
 - The original full migration file remains unchanged at migrations/sql_migration.sql.
+- Local-only helpers (e.g. `local_only/00_auth_stubs-LOCAL-ONLY.sql`) exist strictly for running against a vanilla Postgres instance. **Do not** apply them to Supabase projects.
 
 How to run (psql example on Windows PowerShell)
 psql -h <host> -U <user> -d <db> -f "c:/Users/jayar/Desktop/JoMarket/migrations/split/01_extensions_and_types.sql"

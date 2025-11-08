@@ -1,4 +1,4 @@
--- 17_payouts.sql
+-- 18_payouts.sql
 create table if not exists public.payouts (
   id uuid primary key default gen_random_uuid(),
   vendor_id uuid not null references public.vendors(id) on delete cascade,

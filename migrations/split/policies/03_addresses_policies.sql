@@ -3,6 +3,11 @@
 -- WARNING: Policies reference `auth` objects (auth.users / auth.uid()).
 -- Ensure you only apply these on Supabase or after creating local `auth` stubs for testing.
 
+-- Drop existing policies if present so the file can be reapplied idempotently
+drop policy if exists "addresses_owner_crud" on public.addresses;
+drop policy if exists "addresses_vendor_manage" on public.addresses;
+drop policy if exists "addresses_delivery_provider_manage" on public.addresses;
+
 create policy "addresses_owner_crud" on public.addresses
 for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "addresses_vendor_manage" on public.addresses
