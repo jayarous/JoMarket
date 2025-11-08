@@ -1,6 +1,9 @@
 ---
 name: CI
 
+# Allow manual runs from the Actions UI and via gh workflow run
+workflow_dispatch:
+
 on:
   push:
     branches: [main]
