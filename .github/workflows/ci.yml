@@ -47,9 +47,9 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Use the latest stable Flutter SDK available on the action runner.
-          # This should provide a Dart SDK compatible with the project's pubspec.
-          flutter-version: 'latest'
+          # Pin a concrete Flutter SDK release that includes a Dart SDK compatible
+          # with our pubspec (Dart >= 3.9.2). We'll try Flutter 4.0.0 first.
+          flutter-version: '4.0.0'
 
       - name: Cache Pub
         uses: actions/cache@v4
