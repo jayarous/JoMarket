@@ -68,12 +68,49 @@ Future<void> bootstrapSupabase() async {
 Future<void> _loadLocalEnvIfPresent() async {
   try {
     await dotenv.load();
+    // Report what dotenv loaded (helpful during local debugging)
+    debugPrint(
+      'dotenv.load() succeeded; SUPABASE_KEY present: ${dotenv.env.containsKey('SUPABASE_KEY')}',
+    );
+
+    // If dotenv.load() succeeded but the required key is missing, try the
+    // alternative asset path `env/.env` and merge any keys found there.
+    if (!dotenv.env.containsKey('SUPABASE_KEY')) {
+      try {
+        final contents = await rootBundle.loadString('env/.env');
+        final lines = contents.split(RegExp(r'\r?\n'));
+        for (var line in lines) {
+          line = line.trim();
+          if (line.isEmpty || line.startsWith('#')) continue;
+          final idx = line.indexOf('=');
+          if (idx <= 0) continue;
+          final key = line.substring(0, idx).trim();
+          var value = line.substring(idx + 1).trim();
+          if (value.startsWith('"') &&
+              value.endsWith('"') &&
+              value.length >= 2) {
+            value = value.substring(1, value.length - 1);
+          }
+          dotenv.env.putIfAbsent(key, () => value);
+        }
+        debugPrint(
+          'Merged env/.env into dotenv; SUPABASE_KEY present: ${dotenv.env.containsKey('SUPABASE_KEY')}',
+        );
+      } catch (_) {
+        // ignore
+      }
+    }
   } on Exception catch (exception) {
     if (!_looksLikeMissingEnv(exception)) {
       rethrow;
     }
+
     try {
       final contents = await rootBundle.loadString('.env');
+      if (contents.isEmpty) {
+        // If the root .env asset exists but is empty, try the env/.env path too.
+        throw Exception('empty');
+      }
       final lines = contents.split(RegExp(r'\r?\n'));
       for (var line in lines) {
         line = line.trim();
@@ -89,7 +126,30 @@ Future<void> _loadLocalEnvIfPresent() async {
       }
       debugPrint('Loaded .env from assets into dotenv.');
     } catch (_) {
-      debugPrint('No local .env file found; continuing without it.');
+      // Try the alternative path 'env/.env' (some developers keep their
+      // example/real env files inside the env/ folder). Fall back silently
+      // if that is also not present.
+      try {
+        final contents = await rootBundle.loadString('env/.env');
+        final lines = contents.split(RegExp(r'\r?\n'));
+        for (var line in lines) {
+          line = line.trim();
+          if (line.isEmpty || line.startsWith('#')) continue;
+          final idx = line.indexOf('=');
+          if (idx <= 0) continue;
+          final key = line.substring(0, idx).trim();
+          var value = line.substring(idx + 1).trim();
+          if (value.startsWith('"') &&
+              value.endsWith('"') &&
+              value.length >= 2) {
+            value = value.substring(1, value.length - 1);
+          }
+          dotenv.env[key] = value;
+        }
+        debugPrint('Loaded env/.env from assets into dotenv.');
+      } catch (_) {
+        debugPrint('No local .env file found; continuing without it.');
+      }
     }
   } on Error catch (error, stackTrace) {
     if (!_looksLikeMissingEnv(error)) {

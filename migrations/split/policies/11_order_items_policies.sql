@@ -1,4 +1,4 @@
--- 10_order_items_policies.sql
+-- 11_order_items_policies.sql
 -- Copied from migrations/split/policies/10_order_items_policies.sql
 -- WARNING: Policies reference `auth` objects (auth.users / auth.uid()).
 -- Ensure you only apply these on Supabase or after creating local `auth` stubs for testing.

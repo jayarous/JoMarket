@@ -8,6 +8,7 @@ Recommended execution order
 
 Run each table file, then its corresponding policy file (when present). Policies are located in `migrations/split/policies/` and are named with the same numeric prefix for clarity. This lets you validate table creation first and then enable RLS for that table before proceeding to dependent child tables.
 
+0. 00_platform_admins.sql (creates the helper table/function `is_platform_admin`)
 1. 01_extensions_and_types.sql
 2. 02_categories.sql
    - policies/02_categories_policies.sql
@@ -43,21 +44,35 @@ Run each table file, then its corresponding policy file (when present). Policies
 14. 14_reviews.sql
    - policies/14_reviews_policies.sql
 15. 15_vendor_documents_warehouses_inventory_restock.sql
+   - policies/15_vendor_documents_policies.sql
+   - policies/15_warehouses_policies.sql
+   - policies/15_inventory_policies.sql
+   - policies/15_restock_requests_policies.sql
 16. 16_order_events_and_support.sql
+   - policies/16_order_events_policies.sql
+   - policies/16_support_tickets_policies.sql
+   - policies/16_ticket_messages_policies.sql
 17. 17_transactions_disputes_refunds.sql
+   - policies/17_transactions_policies.sql
+   - policies/17_disputes_policies.sql
+   - policies/17_refunds_policies.sql
 18. 18_payouts.sql
+   - policies/18_payouts_policies.sql
 19. 19_audit_logs.sql
+   - policies/19_audit_logs_policies.sql
 20. 20_device_tokens.sql
+   - policies/20_device_tokens_policies.sql
 21. 21_notifications.sql
+   - policies/21_notifications_policies.sql
 22. 22_user_roles.sql
 23. 23_profiles.sql
 24. 24_triggers_and_rls.sql
-99. 99_run_full_migration_original.sql (runs original full migration)
 
 Notes
 - Many tables reference `auth.users` and use `auth.uid()` inside RLS policies: this is specific to Supabase. Ensure Supabase Auth exists before running.
 - Run the scripts using a privileged role (service_role or DB superuser) because CREATE EXTENSION and CREATE FUNCTION require elevated privileges.
-- `24_triggers_and_rls.sql` now mirrors the full migration by enabling RLS on every table; run it after the numbered tables (and again after policies if needed).
+- The PowerShell helper `run_migrations.ps1` automatically runs each policy file that matches the prefix of the SQL that just executed, so the new files under prefixes 15-21 will be applied automatically.
+- `24_triggers_and_rls.sql` mirrors the full migration by enabling RLS on every table, including the newly split tables. Run it after the numbered tables (and again after policies if needed).
 - The original full migration file remains unchanged at migrations/sql_migration.sql.
 - Local-only helpers (e.g. `local_only/00_auth_stubs-LOCAL-ONLY.sql`) exist strictly for running against a vanilla Postgres instance. **Do not** apply them to Supabase projects.
 
