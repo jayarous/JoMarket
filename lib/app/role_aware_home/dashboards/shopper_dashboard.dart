@@ -132,11 +132,17 @@ class _SearchField extends StatelessWidget {
     required this.focusNode,
     required this.isFocused,
     required this.highContrast,
+    required this.controller,
+    required this.onClear,
+    this.onSubmitted,
   });
 
   final FocusNode focusNode;
   final bool isFocused;
   final bool highContrast;
+  final TextEditingController controller;
+  final VoidCallback onClear;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +150,7 @@ class _SearchField extends StatelessWidget {
     final baseColor = highContrast
         ? const Color(0xFF1F2937)
         : theme.colorScheme.surface;
+    final hasQuery = controller.text.trim().isNotEmpty;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 240),
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -172,23 +179,33 @@ class _SearchField extends StatelessWidget {
         ],
       ),
       child: TextField(
+        controller: controller,
         focusNode: focusNode,
         textInputAction: TextInputAction.search,
-        decoration: const InputDecoration(
-          hintText: 'Search products, brands…',
-          prefixIcon: Icon(Icons.search_rounded),
+        onSubmitted: onSubmitted,
+        decoration: InputDecoration(
+          hintText: 'Search products, brands...',
+          prefixIcon: const Icon(Icons.search_rounded),
           suffixIcon: SizedBox(
-            width: 92,
+            width: hasQuery ? 132 : 92,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _SuffixIconButton(
+                if (hasQuery) ...[
+                  _SuffixIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: 'Clear search',
+                    onTap: onClear,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                const _SuffixIconButton(
                   icon: Icons.mic_none_rounded,
                   tooltip: 'Voice search',
                 ),
-                SizedBox(width: 4),
-                _SuffixIconButton(
+                const SizedBox(width: 4),
+                const _SuffixIconButton(
                   icon: Icons.qr_code_scanner_rounded,
                   tooltip: 'Scan barcode',
                 ),
@@ -203,16 +220,25 @@ class _SearchField extends StatelessWidget {
 }
 
 class _SuffixIconButton extends StatelessWidget {
-  const _SuffixIconButton({required this.icon, required this.tooltip});
+  const _SuffixIconButton({
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+  });
 
   final IconData icon;
   final String tooltip;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: InkResponse(radius: 20, onTap: () {}, child: Icon(icon, size: 20)),
+      child: InkResponse(
+        radius: 20,
+        onTap: onTap ?? () {},
+        child: Icon(icon, size: 20),
+      ),
     );
   }
 }
@@ -591,87 +617,94 @@ class _ProductGrid extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  product.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: highContrast ? Colors.white : null,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.star,
-                      size: 12,
-                      color: Colors.amberAccent.shade700,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      rating.toStringAsFixed(1),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                    Text(
-                      ' ($reviewCount)',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: Colors.grey),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Wrap(
-                  spacing: 4,
-                  runSpacing: 2,
-                  children: [
-                    if (hasPrime)
-                      _ProductBadge(
-                        label: 'Prime',
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    if (shipsToday)
-                      const _ProductBadge(
-                        label: 'Ships today',
-                        color: Color(0xFF10B981),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                if (price != null)
-                  Row(
+                // Make the middle content expand so the CTA stays anchored to the bottom
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(
-                        child: Text(
-                          '${product.currency} ${price.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: highContrast
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.onSurface,
-                              ),
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: highContrast ? Colors.white : null,
                         ),
                       ),
-                      if (oldPrice != null)
-                        Flexible(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: Text(
-                              '${product.currency} ${oldPrice.toStringAsFixed(2)}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    decoration: TextDecoration.lineThrough,
-                                    color: Colors.grey,
-                                  ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.star,
+                            size: 12,
+                            color: Colors.amberAccent.shade700,
                           ),
+                          const SizedBox(width: 2),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                          Text(
+                            ' ($reviewCount)',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: [
+                          if (hasPrime)
+                            _ProductBadge(
+                              label: 'Prime',
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          if (shipsToday)
+                            const _ProductBadge(
+                              label: 'Ships today',
+                              color: Color(0xFF10B981),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (price != null)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${product.currency} ${price.toStringAsFixed(2)}',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: highContrast
+                                          ? Colors.white
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (oldPrice != null)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Text(
+                                  '${product.currency} ${oldPrice.toStringAsFixed(2)}',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        decoration: TextDecoration.lineThrough,
+                                        color: Colors.grey,
+                                      ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
                         ),
                     ],
                   ),
+                ),
                 const SizedBox(height: 4),
                 SizedBox(
                   width: double.infinity,
@@ -737,99 +770,137 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final background = highContrast
         ? const Color(0xFF0F172A)
-        : Theme.of(context).colorScheme.surface;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+        : colorScheme.surface;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final widthPerItem = constraints.maxWidth / items.length;
+        final isCompact = widthPerItem < 88;
+        final isUltraCompact = widthPerItem < 74;
+
+        final EdgeInsets containerPadding = EdgeInsets.symmetric(
+          horizontal: isUltraCompact
+              ? 6
+              : isCompact
+              ? 8
+              : 12,
+          vertical: isUltraCompact ? 4 : 6,
+        );
+
+        final EdgeInsets itemPadding = EdgeInsets.symmetric(
+          horizontal: isUltraCompact
+              ? 4
+              : isCompact
+              ? 6
+              : 10,
+          vertical: isUltraCompact
+              ? 4
+              : isCompact
+              ? 6
+              : 8,
+        );
+
+        final double iconSize = isUltraCompact ? 20 : 24;
+        final double labelFontSize = isUltraCompact ? 10 : 12;
+        final double spacing = isUltraCompact ? 2 : 4;
+
+        return Container(
+          padding: containerPadding,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final item = entry.value;
-          final isActive = index == activeIndex;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stack(
-                      clipBehavior: Clip.none,
+          child: Row(
+            children: items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final isActive = index == activeIndex;
+              return Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: itemPadding,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? colorScheme.primary.withOpacity(0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          item.icon,
-                          color: isActive
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        if (item.label == 'Cart')
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.error,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                '2',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(
+                              item.icon,
+                              size: iconSize,
+                              color: isActive
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                            if (item.label == 'Cart')
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.error,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    '2',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
+                          ],
+                        ),
+                        SizedBox(height: spacing),
+                        Text(
+                          item.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: labelFontSize,
+                            fontWeight: isActive
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isActive
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
                           ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.label,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        fontWeight: isActive
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: isActive
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 }
@@ -860,6 +931,7 @@ class _NavItem {
 class _ShopperDashboardState extends State<ShopperDashboard> {
   late Future<ShopperDashboardData> _future;
   final FocusNode _searchFocusNode = FocusNode();
+  final TextEditingController _searchController = TextEditingController();
   final PageController _promoController = PageController(
     viewportFraction: 0.86,
   );
@@ -870,6 +942,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   bool _highContrastMode = false;
   int _activeFilterIndex = 0;
   int _activeNavIndex = 0;
+  String _searchQuery = '';
 
   static const List<String> _filters = [
     'All',
@@ -916,6 +989,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     super.initState();
     _future = widget.repository.loadShopperData();
     _searchFocusNode.addListener(_handleSearchFocus);
+    _searchController.addListener(_handleSearchTextChanged);
     _promoController.addListener(_handlePromoPosition);
     _startPromoAutoScroll();
   }
@@ -929,11 +1003,37 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _searchFocusNode
       ..removeListener(_handleSearchFocus)
       ..dispose();
+    _searchController
+      ..removeListener(_handleSearchTextChanged)
+      ..dispose();
     super.dispose();
   }
 
   void _handleSearchFocus() {
     setState(() => _isSearchFocused = _searchFocusNode.hasFocus);
+  }
+
+  void _handleSearchTextChanged() {
+    final nextQuery = _searchController.text;
+    if (nextQuery == _searchQuery) return;
+    setState(() => _searchQuery = nextQuery);
+  }
+
+  void _handleSearchSubmitted(String value) {
+    final trimmed = value.trim();
+    if (trimmed != value) {
+      _searchController.value = TextEditingValue(
+        text: trimmed,
+        selection: TextSelection.collapsed(offset: trimmed.length),
+      );
+    }
+    _searchFocusNode.unfocus();
+  }
+
+  void _clearSearch() {
+    if (_searchController.text.isEmpty) return;
+    _searchController.clear();
+    _searchFocusNode.unfocus();
   }
 
   void _handlePromoPosition() {
@@ -957,6 +1057,17 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     });
   }
 
+  List<ProductSummary> _filteredProducts(List<ProductSummary> products) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return products;
+    return products.where((product) {
+      final nameMatch = product.name.toLowerCase().contains(query);
+      final priceLabel = _formatPrice(product).toLowerCase();
+      final idMatch = product.id.toLowerCase().contains(query);
+      return nameMatch || idMatch || priceLabel.contains(query);
+    }).toList();
+  }
+
   void _reload() {
     setState(() {
       _future = widget.repository.loadShopperData();
@@ -973,236 +1084,388 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<ShopperDashboardData>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _DashboardLoading();
-        }
-        if (snapshot.hasError) {
-          return _DashboardError(
-            message:
-                'Could not load featured products. Pull to refresh or try again.',
-            error: snapshot.error.toString(),
-            onRetry: _reload,
-          );
-        }
-        final data = snapshot.data!;
-        final trendingProducts = data.featuredProducts.take(5).toList();
-        final theme = Theme.of(context);
-        return RefreshIndicator(
-          onRefresh: _refresh,
-          displacement: 12,
-          color: theme.colorScheme.primary,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isCompact = constraints.maxWidth < 500;
-              final textColor = _highContrastMode
-                  ? Colors.white
-                  : theme.colorScheme.onSurface;
-              final surfaceVariant = _highContrastMode
-                  ? const Color(0xFF111827)
-                  : theme.colorScheme.surfaceContainerHighest.withOpacity(0.8);
+    return Scaffold(
+      // Allow the body to extend behind the custom navigation bar so it can
+      // sit flush with the bottom system inset without an artificial gap.
+      extendBody: true,
+      // Keep the body driven by the existing FutureBuilder so loading/error
+      // states remain unchanged, but place the navigation into the
+      // Scaffold's bottomNavigationBar so it stays visible while scrolling.
+      body: FutureBuilder<ShopperDashboardData>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const _DashboardLoading();
+          }
+          if (snapshot.hasError) {
+            return _DashboardError(
+              message:
+                  'Could not load featured products. Pull to refresh or try again.',
+              error: snapshot.error.toString(),
+              onRetry: _reload,
+            );
+          }
+          final data = snapshot.data!;
+          final trendingProducts = data.featuredProducts.take(5).toList();
+          final filteredProducts = _filteredProducts(data.featuredProducts);
+          final hasSearchQuery = _searchQuery.trim().isNotEmpty;
+          final activeQueryLabel = _searchController.text.trim();
+          final theme = Theme.of(context);
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            displacement: 12,
+            color: theme.colorScheme.primary,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 500;
+                final textColor = _highContrastMode
+                    ? Colors.white
+                    : theme.colorScheme.onSurface;
+                final surfaceVariant = _highContrastMode
+                    ? const Color(0xFF111827)
+                    : theme.colorScheme.surfaceContainerHighest.withOpacity(
+                        0.8,
+                      );
 
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _HomeHeader(
-                        profile: widget.profile,
-                        notificationCount: trendingProducts.isEmpty ? 0 : 3,
-                        highContrast: _highContrastMode,
-                        onContrastChanged: (value) {
-                          setState(() => _highContrastMode = value);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _SearchField(
-                        focusNode: _searchFocusNode,
-                        isFocused: _isSearchFocused,
-                        highContrast: _highContrastMode,
-                      ),
-                      const SizedBox(height: 16),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: _showCartReminder
-                            ? _InlineNotificationBanner(
-                                message:
-                                    '4 items are waiting in your cart. Checkout now before they sell out.',
-                                onClose: () =>
-                                    setState(() => _showCartReminder = false),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      const SizedBox(height: 20),
-                      _PromoCarousel(
-                        banners: _promoBanners,
-                        controller: _promoController,
-                        activeIndex: _activePromoIndex,
-                        highContrast: _highContrastMode,
-                      ),
-                      const SizedBox(height: 20),
-                      _SectionHeader(
-                        title: 'Trending now 🔥',
-                        action: IconButton(
-                          icon: const Icon(Icons.refresh),
-                          tooltip: 'Reload deals',
-                          onPressed: _reload,
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _HomeHeader(
+                          profile: widget.profile,
+                          notificationCount: trendingProducts.isEmpty ? 0 : 3,
+                          highContrast: _highContrastMode,
+                          onContrastChanged: (value) {
+                            setState(() => _highContrastMode = value);
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (trendingProducts.isEmpty)
-                        const _EmptyState(message: 'No published products yet.')
-                      else
-                        _TrendingDeck(
-                          products: trendingProducts,
+                        const SizedBox(height: 16),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: _showCartReminder
+                              ? _InlineNotificationBanner(
+                                  message:
+                                      '4 items are waiting in your cart. Checkout now before they sell out.',
+                                  onClose: () =>
+                                      setState(() => _showCartReminder = false),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                        const SizedBox(height: 20),
+                        _PromoCarousel(
+                          banners: _promoBanners,
+                          controller: _promoController,
+                          activeIndex: _activePromoIndex,
                           highContrast: _highContrastMode,
                         ),
-                      const SizedBox(height: 24),
-                      _SectionHeader(
-                        title: 'Top categories',
-                        action: TextButton(
-                          onPressed: data.categories.isEmpty ? null : _reload,
-                          child: const Text('Refresh'),
+                        const SizedBox(height: 20),
+                        _SectionHeader(
+                          title: 'Trending now 🔥',
+                          action: IconButton(
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reload deals',
+                            onPressed: _reload,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (data.categories.isEmpty)
-                        const _EmptyState(message: 'No categories created yet.')
-                      else
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: data.categories
-                              .map(
-                                (category) => FilterChip(
-                                  label: Text(category.name),
-                                  selectedColor: theme.colorScheme.primary
-                                      .withOpacity(0.12),
-                                  onSelected: (_) {},
-                                  selected: false,
-                                ),
-                              )
-                              .toList(),
+                        const SizedBox(height: 12),
+                        if (trendingProducts.isEmpty)
+                          const _EmptyState(
+                            message: 'No published products yet.',
+                          )
+                        else
+                          _TrendingDeck(
+                            products: trendingProducts,
+                            highContrast: _highContrastMode,
+                          ),
+                        const SizedBox(height: 24),
+                        _CategoryFilter(
+                          categories: data.categories,
+                          onCategorySelected: (categoryId) {
+                            // Handle category selection
+                          },
                         ),
-                      const SizedBox(height: 24),
-                      _SectionHeader(
-                        title: 'Personalized picks',
-                        action: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _highContrastMode
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_outlined,
-                              size: 18,
-                            ),
-                            Switch.adaptive(
-                              value: _highContrastMode,
-                              onChanged: (value) =>
-                                  setState(() => _highContrastMode = value),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: List.generate(_filters.length, (index) {
-                            final isSelected = index == _activeFilterIndex;
-                            return Padding(
-                              padding: EdgeInsets.only(
-                                right: index == _filters.length - 1 ? 0 : 8,
+                        const SizedBox(height: 24),
+                        _SectionHeader(
+                          title: 'Personalized picks',
+                          action: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _highContrastMode
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_outlined,
+                                size: 18,
                               ),
-                              child: ChoiceChip(
-                                label: Text(_filters[index]),
-                                selected: isSelected,
-                                onSelected: (_) {
-                                  setState(() => _activeFilterIndex = index);
-                                },
+                              Switch.adaptive(
+                                value: _highContrastMode,
+                                onChanged: (value) =>
+                                    setState(() => _highContrastMode = value),
                               ),
-                            );
-                          }),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (data.featuredProducts.isEmpty)
-                        const _EmptyState(
-                          message:
-                              'No personalized products yet. Publish a product to preview the shopper view.',
-                        )
-                      else
-                        _ProductGrid(
-                          products: data.featuredProducts,
-                          isCompact: isCompact,
+                        const SizedBox(height: 12),
+                        _SearchField(
+                          focusNode: _searchFocusNode,
+                          isFocused: _isSearchFocused,
                           highContrast: _highContrastMode,
+                          controller: _searchController,
+                          onClear: _clearSearch,
+                          onSubmitted: _handleSearchSubmitted,
                         ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Load time optimized with lazy content. Images stream after the first frame for faster perceived performance.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: textColor.withOpacity(0.7),
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: List.generate(_filters.length, (index) {
+                              final isSelected = index == _activeFilterIndex;
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  right: index == _filters.length - 1 ? 0 : 8,
+                                ),
+                                child: ChoiceChip(
+                                  label: Text(_filters[index]),
+                                  selected: isSelected,
+                                  onSelected: (_) {
+                                    setState(() => _activeFilterIndex = index);
+                                  },
+                                ),
+                              );
+                            }),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      _BottomNavBar(
-                        items: _navItems,
-                        activeIndex: _activeNavIndex,
-                        onChanged: (index) =>
-                            setState(() => _activeNavIndex = index),
-                        highContrast: _highContrastMode,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Navigation responds to device width: more than 600px swaps to a rail in the dedicated mobile shell.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: textColor.withOpacity(0.65),
+                        const SizedBox(height: 12),
+                        if (data.featuredProducts.isEmpty)
+                          const _EmptyState(
+                            message:
+                                'No personalized products yet. Publish a product to preview the shopper view.',
+                          )
+                        else if (hasSearchQuery &&
+                            filteredProducts.isEmpty)
+                          _EmptyState(
+                            message:
+                                'No products found for "$activeQueryLabel". Try a different keyword or clear the search.',
+                          )
+                        else
+                          _ProductGrid(
+                            products: filteredProducts,
+                            isCompact: isCompact,
+                            highContrast: _highContrastMode,
+                          ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Load time optimized with lazy content. Images stream after the first frame for faster perceived performance.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: textColor.withOpacity(0.7),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(top: 12),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                        const SizedBox(height: 20),
+                        Text(
+                          'Navigation responds to device width: more than 600px swaps to a rail in the dedicated mobile shell.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: textColor.withOpacity(0.65),
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: surfaceVariant,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.shield_outlined,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'ARIA labels and semantic regions included. Toasts use aria-live for voice-over support.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: textColor,
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: surfaceVariant,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.shield_outlined,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'ARIA labels and semantic regions included. Toasts use aria-live for voice-over support.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: textColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+      // Remove the extra bottom padding so the bar rests directly on the
+      // system inset (SafeArea provides required bottom spacing). This trims
+      // the previously visible gap beneath the buttons.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: _BottomNavBar(
+          items: _navItems,
+          activeIndex: _activeNavIndex,
+          onChanged: (index) => setState(() => _activeNavIndex = index),
+          highContrast: _highContrastMode,
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryFilter extends StatefulWidget {
+  const _CategoryFilter({
+    required this.categories,
+    required this.onCategorySelected,
+  });
+
+  final List<CategorySummary> categories;
+  final ValueChanged<String?> onCategorySelected;
+
+  @override
+  State<_CategoryFilter> createState() => _CategoryFilterState();
+}
+
+class _CategoryFilterState extends State<_CategoryFilter> {
+  String? _selectedCategoryId;
+
+  // Map category names to icons
+  IconData _getCategoryIcon(String categoryName) {
+    final name = categoryName.toLowerCase();
+    if (name.contains('electronic')) return Icons.laptop_chromebook;
+    if (name.contains('fashion') || name.contains('cloth'))
+      return Icons.checkroom;
+    if (name.contains('home') || name.contains('furniture')) return Icons.home;
+    if (name.contains('food') || name.contains('grocery'))
+      return Icons.restaurant;
+    if (name.contains('book')) return Icons.menu_book;
+    if (name.contains('sport')) return Icons.sports_soccer;
+    if (name.contains('toy')) return Icons.toys;
+    if (name.contains('beauty') || name.contains('health')) return Icons.spa;
+    return Icons.category; // Default icon
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Categories',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: widget.categories.length + 1, // +1 for "All"
+            itemBuilder: (context, index) {
+              final isAll = index == 0;
+              final category = isAll ? null : widget.categories[index - 1];
+              final isSelected = isAll
+                  ? _selectedCategoryId == null
+                  : _selectedCategoryId == category?.id;
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _CategoryItem(
+                  label: isAll ? 'All' : category!.name,
+                  icon: isAll
+                      ? Icons.grid_view
+                      : _getCategoryIcon(category!.name),
+                  isSelected: isSelected,
+                  onTap: () {
+                    setState(() {
+                      _selectedCategoryId = category?.id;
+                    });
+                    widget.onCategorySelected(category?.id);
+                  },
                 ),
               );
             },
           ),
-        );
-      },
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryItem extends StatelessWidget {
+  const _CategoryItem({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.surfaceContainerHighest,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 32,
+              color: isSelected
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }

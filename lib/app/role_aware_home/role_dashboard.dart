@@ -2,21 +2,23 @@ part of 'package:jo_market/app/role_aware_home.dart';
 
 class RoleDashboard extends StatefulWidget {
   const RoleDashboard({
-    required this.session,
+    this.session,
     required this.profile,
     required this.roles,
     required this.profileRepository,
     required this.dashboardRepository,
     required this.onReloadRequested,
+    this.onGuestSignInRequested,
     super.key,
   });
 
-  final Session session;
+  final Session? session;
   final UserProfile profile;
   final List<RoleAssignment> roles;
   final ProfileRepository profileRepository;
   final DashboardRepository dashboardRepository;
   final VoidCallback onReloadRequested;
+  final VoidCallback? onGuestSignInRequested;
 
   @override
   State<RoleDashboard> createState() => _RoleDashboardState();
@@ -41,6 +43,10 @@ class _RoleDashboardState extends State<RoleDashboard> {
   }
 
   RoleAssignment _preferredRole(List<RoleAssignment> roles) {
+    if (roles.isEmpty) {
+      return RoleAssignment.guest();
+    }
+
     const priority = [
       AppUserRole.admin,
       AppUserRole.vendorOwner,
@@ -119,57 +125,63 @@ class _RoleDashboardState extends State<RoleDashboard> {
           ],
         ),
         actions: [
-          PopupMenuButton<RoleAssignment>(
-            tooltip: 'Switch role',
-            icon: const Icon(Icons.switch_account),
-            onSelected: (role) {
-              setState(() {
-                _activeRole = role;
-              });
-            },
-            itemBuilder: (context) {
-              return widget.roles
-                  .map(
-                    (role) => PopupMenuItem<RoleAssignment>(
-                      value: role,
-                      child: Text(role.displayLabel),
-                    ),
-                  )
-                  .toList();
-            },
-          ),
-          IconButton(
-            tooltip: 'Edit profile',
-            icon: const Icon(Icons.account_circle),
-            onPressed: _editProfile,
-          ),
-          IconButton(
-            tooltip: 'Reload profile',
-            icon: const Icon(Icons.refresh),
-            onPressed: widget.onReloadRequested,
-          ),
-          IconButton(
-            tooltip: 'Sign out',
-            icon: _signingOut
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.logout),
-            onPressed: _signingOut ? null : _signOut,
-          ),
+          if (widget.roles.length > 1)
+            PopupMenuButton<RoleAssignment>(
+              tooltip: 'Switch role',
+              icon: const Icon(Icons.switch_account),
+              onSelected: (role) {
+                setState(() {
+                  _activeRole = role;
+                });
+              },
+              itemBuilder: (context) {
+                return widget.roles
+                    .map(
+                      (role) => PopupMenuItem<RoleAssignment>(
+                        value: role,
+                        child: Text(role.displayLabel),
+                      ),
+                    )
+                    .toList();
+              },
+            ),
+          if (widget.session != null) ...[
+            IconButton(
+              tooltip: 'Edit profile',
+              icon: const Icon(Icons.account_circle),
+              onPressed: _editProfile,
+            ),
+            IconButton(
+              tooltip: 'Reload profile',
+              icon: const Icon(Icons.refresh),
+              onPressed: widget.onReloadRequested,
+            ),
+            IconButton(
+              tooltip: 'Sign out',
+              icon: _signingOut
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.logout),
+              onPressed: _signingOut ? null : _signOut,
+            ),
+          ] else
+            IconButton(
+              tooltip: 'Sign in',
+              icon: const Icon(Icons.login),
+              onPressed: widget.onGuestSignInRequested,
+            ),
         ],
       ),
-      body: ListView(
+      body: Padding(
         padding: const EdgeInsets.all(24),
-        children: [
-          _RoleContentCard(
-            role: _activeRole,
-            profile: widget.profile,
-            repository: widget.dashboardRepository,
-          ),
-        ],
+        child: _RoleContentCard(
+          role: _activeRole,
+          profile: widget.profile,
+          repository: widget.dashboardRepository,
+        ),
       ),
     );
   }
@@ -209,16 +221,11 @@ class _RoleContentCard extends StatelessWidget {
         break;
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: KeyedSubtree(
-            key: ValueKey('${role.id}-${role.role.name}'),
-            child: body,
-          ),
-        ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: KeyedSubtree(
+        key: ValueKey('${role.id}-${role.role.name}'),
+        child: body,
       ),
     );
   }

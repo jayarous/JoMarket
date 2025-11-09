@@ -16,6 +16,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   Session? _session;
+  bool _isGuest = false;
   late final StreamSubscription<AuthState> _authSubscription;
   bool _handlingPasswordRecovery = false;
 
@@ -30,6 +31,9 @@ class _AuthGateState extends State<AuthGate> {
       }
       setState(() {
         _session = data.session;
+        if (data.session != null) {
+          _isGuest = false;
+        }
       });
     });
   }
@@ -38,6 +42,18 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() {
     _authSubscription.cancel();
     super.dispose();
+  }
+
+  void _setGuest() {
+    setState(() {
+      _isGuest = true;
+    });
+  }
+
+  void _exitGuest() {
+    setState(() {
+      _isGuest = false;
+    });
   }
 
   Future<void> _handlePasswordRecovery() async {
@@ -67,8 +83,14 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_session != null) {
-      return RoleAwareHome(session: _session!);
+      return RoleAwareHome(
+        session: _session!,
+        onGuestSignInRequested: _exitGuest,
+      );
     }
-    return const AuthForm();
+    if (_isGuest) {
+      return RoleAwareHome(session: null, onGuestSignInRequested: _exitGuest);
+    }
+    return AuthForm(onGuest: _setGuest);
   }
 }

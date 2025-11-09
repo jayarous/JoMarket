@@ -42,6 +42,14 @@ class RoleAssignment {
   final String? vendorId;
   final String? vendorName;
 
+  factory RoleAssignment.guest() {
+    return RoleAssignment(
+      id: 'guest',
+      role: AppUserRole.shopper,
+      createdAt: DateTime.now(),
+    );
+  }
+
   bool get isVendorScoped => vendorId != null;
 
   String get displayLabel {
@@ -90,6 +98,19 @@ class UserProfile {
   final String? defaultCountry;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  factory UserProfile.guest() {
+    final now = DateTime.now();
+    return UserProfile(
+      userId: 'guest',
+      fullName: 'Guest User',
+      phone: null,
+      avatarUrl: null,
+      defaultCountry: null,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
 
   UserProfile copyWith({
     String? fullName,

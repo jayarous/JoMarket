@@ -8,7 +8,9 @@ import '../dialogs/password_reset_dialog.dart';
 enum _AuthMode { signIn, signUp }
 
 class AuthForm extends StatefulWidget {
-  const AuthForm({super.key});
+  const AuthForm({super.key, this.onGuest});
+
+  final VoidCallback? onGuest;
 
   @override
   State<AuthForm> createState() => _AuthFormState();
@@ -22,6 +24,7 @@ class _AuthFormState extends State<AuthForm> {
   _AuthMode _mode = _AuthMode.signIn;
   bool _loading = false;
   bool _oauthLoading = false;
+  bool _guestLoading = false;
   String? _errorMessage;
 
   @override
@@ -130,6 +133,23 @@ class _AuthFormState extends State<AuthForm> {
     }
   }
 
+  Future<void> _continueAsGuest() async {
+    if (_loading || _oauthLoading || _guestLoading) {
+      return;
+    }
+
+    setState(() {
+      _guestLoading = true;
+      _errorMessage = null;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    if (mounted) {
+      widget.onGuest?.call();
+    }
+  }
+
   void _toggleMode() {
     setState(() {
       _mode = _mode == _AuthMode.signIn ? _AuthMode.signUp : _AuthMode.signIn;
@@ -160,7 +180,7 @@ class _AuthFormState extends State<AuthForm> {
     final toggleLabel = _mode == _AuthMode.signIn
         ? 'Need an account? Sign up'
         : 'Already have an account? Sign in';
-    final busy = _loading || _oauthLoading;
+    final busy = _loading || _oauthLoading || _guestLoading;
     final emailSectionLabel = _mode == _AuthMode.signIn
         ? 'or sign in with email'
         : 'or sign up with email';
@@ -202,6 +222,29 @@ class _AuthFormState extends State<AuthForm> {
                             const Icon(Icons.login, size: 24),
                           const SizedBox(width: 12),
                           const Text('Continue with Google'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: busy ? null : _continueAsGuest,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_guestLoading)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            const Icon(Icons.person_outline, size: 24),
+                          const SizedBox(width: 12),
+                          const Text('Continue as Guest'),
                         ],
                       ),
                     ),

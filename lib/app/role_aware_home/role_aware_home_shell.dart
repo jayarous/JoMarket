@@ -1,9 +1,10 @@
 part of 'package:jo_market/app/role_aware_home.dart';
 
 class RoleAwareHome extends StatefulWidget {
-  const RoleAwareHome({required this.session, super.key});
+  const RoleAwareHome({this.session, this.onGuestSignInRequested, super.key});
 
-  final Session session;
+  final Session? session;
+  final VoidCallback? onGuestSignInRequested;
 
   @override
   State<RoleAwareHome> createState() => _RoleAwareHomeState();
@@ -26,13 +27,17 @@ class _RoleAwareHomeState extends State<RoleAwareHome> {
   @override
   void didUpdateWidget(covariant RoleAwareHome oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.session.user.id != widget.session.user.id) {
+    if (oldWidget.session?.user.id != widget.session?.user.id) {
       _bootstrapFuture = _bootstrap();
     }
   }
 
   Future<_BootstrapResult> _bootstrap() async {
-    final user = widget.session.user;
+    final user = widget.session?.user;
+    if (user == null) {
+      return _BootstrapResult(profile: UserProfile.guest(), roles: const []);
+    }
+
     final metadata = user.userMetadata;
     final profile = await _profileRepository.fetchOrCreateProfile(
       userId: user.id,
@@ -88,6 +93,7 @@ class _RoleAwareHomeState extends State<RoleAwareHome> {
           profileRepository: _profileRepository,
           dashboardRepository: _dashboardRepository,
           onReloadRequested: _retry,
+          onGuestSignInRequested: widget.onGuestSignInRequested,
         );
       },
     );
