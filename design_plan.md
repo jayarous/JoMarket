@@ -49,6 +49,24 @@ JoMarket starts as a single, modular Flutter app (iOS/Android) with role-based U
 - **Payment Integration**: Stripe Connect marketplace flows, 3DS support, dispute callbacks, and payout scheduling.
 - **Delivery Tracking**: Real-time order status updates, deliverer assignment, GPS logging with privacy controls, and optional standalone courier build target.
 
+### Per-role navigation & guardrails
+
+| Role | Entry point | Required data | Guardrails / fallbacks |
+| --- | --- | --- | --- |
+| Shopper (default) | Shopper dashboard → browse/feed module | `profiles`, `categories`, published `products` | Everyone gets shopper privileges automatically; if catalog tables are empty show guided empty states + CTA to refresh. |
+| Vendor owner | Vendor dashboard scoped to `user_roles.vendor_id` | `user_roles` row with `vendor_id`, vendor record, recent `products`/`shipments` | Hide seller UI if `vendor_id` missing; show instruction card telling admins to attach vendor first. |
+| Vendor staff | Same as owner but read-only for payouts/business settings | Same as above plus staff capabilities map | Enforce permission copy (editable sections disabled unless `role` == owner). |
+| Delivery staff | Delivery dashboard with assignment queues | `delivery_staff` row linked to `auth.users`, shipments with `visibility` | If no staff row, show activation instructions; all actions disabled until flag exists. |
+| Admin | Lightweight control panel (analytics placeholders, moderation TODOs) | `user_roles.role = admin` | Keep destructive actions behind explicit confirmation + RLS policies; admins can impersonate/lift other roles. |
+
+Routing rules:
+1. Auth success → bootstrap profile + role list (already implemented). Choose highest-priority role (admin → vendor owner → vendor staff → delivery → shopper) as active tab.
+2. App bar role switcher persists in memory; switching roles rerenders the corresponding dashboard widget without re-auth.
+3. Future detailed screens should register named routes under a per-role Navigator (e.g., `/shopper/catalog`, `/vendor/products/:id`). Until then, the dashboards act as launchpads with placeholder CTAs that navigate to stubs.
+4. Onboarding: shopper onboarding happens implicitly (profile auto-created with country fallback). Vendor/delivery roles require manual approval by ops; when a user lacks the required data, show an informative empty state plus support link rather than a crash.
+
+These rules keep UX consistent while we grow each role’s surface area.
+
 ### Data Models
 - `users` (buyer/seller/deliverer/admin profiles, role metadata, consent flags)
 - `vendors` (business verification, payout configuration, legal documents)
@@ -167,6 +185,24 @@ Row Level Security (RLS) will be enforced per table with policies scoped by role
 - Status update actions (en route, arrived, delivered, issue reported) with photo proof upload
 - Earnings ledger, performance metrics, and schedule availability management
 - Safety/support quick actions (contact dispatch, emergency protocols)
+
+## 5. Supabase seed data workflow
+
+Keeping everyone on the same schema/data snapshot avoids “empty app” demos and ensures dashboards have something to render. Use this workflow whenever a new developer joins or when resetting staging:
+
+1. **Base schema**: run `migrations/sql_migration.sql` (or the split files) against your Supabase project.
+2. **Local auth users**: create three test accounts via Supabase Auth -> Users (shopper@example.test, vendor_owner@example.test, delivery_staff@example.test). Copy their UUIDs.
+3. **Seed scripts**:
+   - `migrations/seed_dev.sql` – buyer-facing catalog (categories, vendors, products) and basic vendor setup. Replace placeholder UUIDs with the auth user IDs you just created.
+   - `migrations/seed_dashboard_samples.sql` – optional extra data for analytics/shipments if you need fuller dashboards.
+4. **Run helper script**: from repo root `.\scripts\run_migrations.ps1 -ConnectionString $conn -SqlFile migrations/seed_dev.sql` (same for the dashboard samples file). The script wraps `psql` so Windows devs don’t have to remember flags.
+5. **Env sync**: confirm `.env` (or `--dart-define`) points at the project where you loaded the seeds. The app refuses to start if `SUPABASE_KEY` is missing to prevent accidental prod hits.
+6. **Verification checklist**:
+   - Shopper dashboard shows at least 1 category and 1 featured product.
+   - Vendor dashboard (when you assign the vendor_owner user to a vendor via `user_roles`) lists the seeded products/shipments.
+   - Delivery dashboard lists the seeded marketplace shipments once you insert the user into `delivery_staff`.
+
+Document any additional fixtures per feature as you build them so this workflow stays living documentation.
 
 ### Admin & Moderation (Future)
 - Dedicated web console for support staff covering user management, dispute resolution, content moderation, and platform configuration.

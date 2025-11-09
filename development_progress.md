@@ -5,7 +5,7 @@ This file tracks the development progress of the JoMarket multivendor e-commerce
 ## Current Stage Summary
 - Stage: Phase 2 - Identity & Access
 - Highlights: Phase 2 kicked off with a role-aware authenticated shell, Supabase profile bootstrap, and default shopper role creation; Phase 1 assets (design plan, schema references, migrations, bootstrap) remain the foundation for upcoming flows.
-- Pending Prerequisites: Finish documenting per-role onboarding/guard requirements, wire the remaining Supabase OAuth redirect/client IDs, and define acceptance tests before building buyer/seller/delivery screens.
+- Pending Prerequisites: ✅ Per-role routing/guardrails and the Supabase seed-data workflow are now documented (see `design_plan.md`). Still outstanding: finish wiring the remaining Supabase OAuth redirect/client IDs and define acceptance tests before building buyer/seller/delivery screens.
 
 ## Implementation Roadmap
 
