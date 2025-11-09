@@ -57,9 +57,12 @@ class DashboardRepository {
         .map((item) => ProductSummary.fromMap(item as Map<String, dynamic>))
         .toList();
 
-    final shipments = (responses[1] as List<dynamic>)
-        .map((item) => ShipmentSummary.fromMap(item as Map<String, dynamic>))
-        .toList();
+    final shipments = (responses[1] as List<dynamic>).map((item) {
+      final map = (item is Map<String, dynamic>)
+          ? item
+          : Map<String, dynamic>.from(item as Map);
+      return ShipmentSummary.fromMap(map);
+    }).toList();
 
     return VendorDashboardData(products: products, shipments: shipments);
   }
@@ -96,12 +99,18 @@ class DashboardRepository {
         .order('updated_at', ascending: false)
         .limit(6);
 
-    final assigned = assignedRows
-        .map((item) => ShipmentSummary.fromMap(item as Map<String, dynamic>))
-        .toList();
-    final marketplace = marketplaceRows
-        .map((item) => ShipmentSummary.fromMap(item as Map<String, dynamic>))
-        .toList();
+    final assigned = assignedRows.map((item) {
+      final map = (item is Map<String, dynamic>)
+          ? item
+          : Map<String, dynamic>.from(item as Map);
+      return ShipmentSummary.fromMap(map);
+    }).toList();
+    final marketplace = marketplaceRows.map((item) {
+      final map = (item is Map<String, dynamic>)
+          ? item
+          : Map<String, dynamic>.from(item as Map);
+      return ShipmentSummary.fromMap(map);
+    }).toList();
 
     return DeliveryDashboardData(
       staffInfo: info,
