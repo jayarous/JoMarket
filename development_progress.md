@@ -3,29 +3,17 @@
 This file tracks the development progress of the JoMarket multivendor e-commerce app based on the implementation roadmap in `design_plan.md`. Milestones are marked with checkboxes as they are completed. Updates should occur at every stage to reflect current status.
 
 ## Current Stage Summary
-- Stage: Phase 1 - Foundation & Platform Setup
-- Highlights: Target architecture, feature scope, data models, Phase 1 foundation deliverables (design tokens, CI/CD gating, env/secrets, observability, RLS policies), and AI-led repo/documentation workflows are now documented in `design_plan.md`.
-- Pending Prerequisites: Secure tooling approvals, stand up CI/CD secrets vault integration, automate token export pipeline, confirm GitHub branch protections/doc automation, and schedule security/observability runbook walkthrough before engineering kickoff.
- - Pending Prerequisites: Secure tooling approvals, stand up CI/CD secrets vault integration, automate token export pipeline, confirm GitHub branch protections/doc automation, and schedule security/observability runbook walkthrough before engineering kickoff.
-
-	Recent actions taken (Phase 1 prerequisite work):
-
-	- CI gating implemented: the repository CI now contains an early check that fails the workflow when required secrets are missing (see `.github/workflows/ci.yml`). This prevents test/build jobs from running with empty credentials.
-	- Token export automation: added cross-platform helper scripts at `scripts/export_env_from_secrets.sh` and `scripts/export_env_from_secrets.ps1` which the CI uses to materialize an ephemeral `env/.env` from repository secrets for test runs. The `env/.env` path is gitignored and the scripts do not commit secrets.
-	- Local development remains unchanged: developers should continue to use `env/.env` (from `.env.example`) or pass `--dart-define` when running locally. In CI, set the following repository secrets: `SUPABASE_URL`, `SUPABASE_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`.
-
-	Remaining manual/administrative items:
-
-	- Vault integration (HashiCorp/Azure/etc.) is out-of-scope for this commit and should be scheduled as a follow-up; CI gating is in place and will be compatible with vault-driven secrets once set up.
-	- GitHub branch protection (required reviewers, status checks) must be configured by repo admins; the CI job `secrets-check` is ready to be added as a required check via branch protection rules.
+- Stage: Phase 2 - Identity & Access
+- Highlights: Phase 2 kicked off with a role-aware authenticated shell, Supabase profile bootstrap, and default shopper role creation; Phase 1 assets (design plan, schema references, migrations, bootstrap) remain the foundation for upcoming flows.
+- Pending Prerequisites: Finish documenting per-role onboarding/guard requirements, wire the remaining Supabase OAuth redirect/client IDs, and define acceptance tests before building buyer/seller/delivery screens.
 
 ## Implementation Roadmap
 
 ### Phase 1: Foundation & Platform Setup
-- [ ] Define architecture, design system, CI/CD, environment configuration, analytics/monitoring baseline, and security policies (RLS, secrets). *(Status: In Progress - architecture and foundation runbooks documented; environment setup automation pending.)*
+- [x] Define architecture, design system, CI/CD, environment configuration, analytics/monitoring baseline, and security policies (RLS, secrets). *(Status: Completed 2025-11-08 - architecture/design docs in place, env handling + Supabase bootstrap wired, migrations/tooling ready.)*
 
 ### Phase 2: Identity & Access
-- [ ] Implement Supabase Auth, role-based navigation/guards, onboarding flows (buyer, seller-lite, deliverer), and basic profile management. *(Status: Not Started)*
+- [ ] Implement Supabase Auth, role-based navigation/guards, onboarding flows (buyer, seller-lite, deliverer), and basic profile management. *(Status: In Progress - role-aware shell + profile bootstrap shipped; onboarding flows and guardrails still pending.)*
 
 ### Phase 3: Buyer Commerce Core
 - [ ] Product catalogue, search/filter, cart/wishlist, checkout skeleton with mock payment, offline caching, and accessibility baseline. *(Status: Not Started)*
@@ -91,6 +79,5 @@ Track these metrics as the project progresses. Use placeholders for current valu
 - Revenue per active seller: [Not Started]
 - CAC vs LTV: [Not Started]
 
----
 
-Last Updated: 2025-11-02T15:32:21.054Z
+Last Updated: 2025-11-08T18:10:00.000Z

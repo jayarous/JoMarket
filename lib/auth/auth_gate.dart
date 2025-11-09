@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../account/account_page.dart';
+import '../app/role_aware_home.dart';
 import 'dialogs/password_update_dialog.dart';
 import 'widgets/auth_form.dart';
 
@@ -67,7 +67,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_session != null) {
-      return AccountPage(session: _session!);
+      return RoleAwareHome(session: _session!);
     }
     return const AuthForm();
   }
