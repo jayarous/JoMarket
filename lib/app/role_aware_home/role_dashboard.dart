@@ -106,7 +106,6 @@ class _RoleDashboardState extends State<RoleDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.session.user;
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -165,12 +164,6 @@ class _RoleDashboardState extends State<RoleDashboard> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          ProfileSummaryCard(
-            profile: widget.profile,
-            email: user.email ?? 'Unknown user',
-            onEditPressed: _editProfile,
-          ),
-          const SizedBox(height: 16),
           _RoleContentCard(
             role: _activeRole,
             profile: widget.profile,
