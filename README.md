@@ -1,19 +1,22 @@
-# jo_market
+# JoMarket
 
-A multivendor shopping app.
+JoMarket is a Supabase-backed multivendor marketplace targeting buyers, sellers, and delivery staff in Jordan. The Flutter app already ships with role-aware auth, profile bootstrap, and dashboard data plumbing so you can focus on building vertical screens (buyer browse/cart, seller tools, courier workflows) without redoing backend glue.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+Prerequisites:
 
-A few resources to get you started if this is your first Flutter project:
+- Flutter 3.9.x (see `environment.sdk` in `pubspec.yaml`)
+- A Supabase project with the schema from `migrations/sql_migration.sql`
+- A local `.env` (or `--dart-define`) that supplies `SUPABASE_KEY` (and optionally `SUPABASE_URL`)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Bootstrap steps:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1. `flutter pub get`
+2. Copy `env/.env.example` to `.env` and fill in your Supabase keys (or pass them with `--dart-define` as described below).
+3. Run `flutter run --dart-define=SUPABASE_KEY=...` (add `SUPABASE_URL` if you are not using the default project URL).
+
+The app will refuse to start if the anon key is missing, helping you catch misconfiguration early.
 
 ## Table of contents
 
