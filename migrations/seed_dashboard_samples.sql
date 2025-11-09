@@ -17,11 +17,13 @@ DECLARE
   placeholder_staff constant uuid := '33333333-3333-3333-3333-333333333333';
   placeholder_delivery constant uuid := '44444444-4444-4444-4444-444444444444';
 
-  single_user_id uuid := '910a8067-9ffb-42cc-b80e-6c4cfc40818b';
-  shopper_id uuid := placeholder_shopper;
-  vendor_owner_id uuid := placeholder_owner;
-  vendor_staff_id uuid := placeholder_staff;
-  delivery_user_id uuid := placeholder_delivery;
+  -- keep single_user_id as the all-zero placeholder so we can assign
+  -- distinct UIDs per role below (do not overwrite them automatically)
+  single_user_id uuid := placeholder_single;
+  shopper_id uuid := 'd0d7d1a1-740e-4b07-9355-e2c7f831d78c';
+  vendor_owner_id uuid := 'daf4a9da-a69d-454f-bd1a-f3b7e1d2a2f4';
+  vendor_staff_id uuid := '800b6c1e-2552-4664-8d6c-9450d50db05b';
+  delivery_user_id uuid := '4f26f12d-5d7a-4297-8cc6-1228557aee90';
 
   electronics_id uuid;
   mobile_id uuid;
