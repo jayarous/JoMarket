@@ -12,14 +12,16 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     // Mock path_provider
-    const MethodChannel(
-      'plugins.flutter.io/path_provider',
-    ).setMockMethodCallHandler((MethodCall methodCall) async {
-      if (methodCall.method == 'getApplicationDocumentsDirectory') {
-        return '/tmp/test';
-      }
-      return null;
-    });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (MethodCall methodCall) async {
+            if (methodCall.method == 'getApplicationDocumentsDirectory') {
+              return '/tmp/test';
+            }
+            return null;
+          },
+        );
 
     // Initialize Supabase for tests
     await Supabase.initialize(

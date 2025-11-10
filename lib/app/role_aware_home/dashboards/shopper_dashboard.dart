@@ -15,17 +15,10 @@ class ShopperDashboard extends StatefulWidget {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({
-    required this.profile,
-    required this.notificationCount,
-    required this.highContrast,
-    required this.onContrastChanged,
-  });
+  const _HomeHeader({required this.profile, required this.notificationCount});
 
   final UserProfile profile;
   final int notificationCount;
-  final bool highContrast;
-  final ValueChanged<bool> onContrastChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -34,17 +27,12 @@ class _HomeHeader extends StatelessWidget {
     final avatarLetter = greetingName.isEmpty
         ? '👋'
         : greetingName.substring(0, 1).toUpperCase();
-    final textColor = highContrast
-        ? Colors.white
-        : theme.colorScheme.onSurfaceVariant;
 
     return Row(
       children: [
         CircleAvatar(
           radius: 28,
-          backgroundColor: highContrast
-              ? const Color(0xFF1F2937)
-              : theme.colorScheme.primary,
+          backgroundColor: theme.colorScheme.primary,
           child: Text(
             avatarLetter,
             style: theme.textTheme.titleLarge?.copyWith(color: Colors.white),
@@ -64,22 +52,8 @@ class _HomeHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 'Ready to continue shopping today?',
-                style: theme.textTheme.bodyMedium?.copyWith(color: textColor),
-              ),
-              TextButton.icon(
-                onPressed: () => onContrastChanged(!highContrast),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                ),
-                icon: Icon(
-                  highContrast
-                      ? Icons.dark_mode_outlined
-                      : Icons.light_mode_outlined,
-                  size: 18,
-                ),
-                label: Text(
-                  highContrast ? 'High contrast on' : 'High contrast off',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -93,9 +67,7 @@ class _HomeHeader extends StatelessWidget {
               onPressed: () {},
               icon: Icon(
                 Icons.notifications_active_outlined,
-                color: highContrast
-                    ? Colors.white
-                    : theme.colorScheme.onSurfaceVariant,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             if (notificationCount > 0)
@@ -131,7 +103,6 @@ class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.focusNode,
     required this.isFocused,
-    required this.highContrast,
     required this.controller,
     required this.onClear,
     this.onSubmitted,
@@ -139,7 +110,6 @@ class _SearchField extends StatelessWidget {
 
   final FocusNode focusNode;
   final bool isFocused;
-  final bool highContrast;
   final TextEditingController controller;
   final VoidCallback onClear;
   final ValueChanged<String>? onSubmitted;
@@ -147,9 +117,7 @@ class _SearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final baseColor = highContrast
-        ? const Color(0xFF1F2937)
-        : theme.colorScheme.surface;
+    final baseColor = theme.colorScheme.surface;
     final hasQuery = controller.text.trim().isNotEmpty;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 240),
@@ -166,13 +134,13 @@ class _SearchField extends StatelessWidget {
         boxShadow: [
           if (isFocused)
             BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.25),
+              color: theme.colorScheme.primary.withValues(alpha: 0.25),
               blurRadius: 22,
               offset: const Offset(0, 6),
             )
           else
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -267,7 +235,7 @@ class _InlineNotificationBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.3),
+              color: theme.colorScheme.primary.withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -302,13 +270,11 @@ class _PromoCarousel extends StatelessWidget {
     required this.banners,
     required this.controller,
     required this.activeIndex,
-    required this.highContrast,
   });
 
   final List<_PromoBannerData> banners;
   final PageController controller;
   final int activeIndex;
-  final bool highContrast;
 
   @override
   Widget build(BuildContext context) {
@@ -326,11 +292,7 @@ class _PromoCarousel extends StatelessWidget {
             padding: EdgeInsets.only(
               right: index == banners.length - 1 ? 0 : 12,
             ),
-            child: _PromoCard(
-              data: banner,
-              isActive: index == activeIndex,
-              highContrast: highContrast,
-            ),
+            child: _PromoCard(data: banner, isActive: index == activeIndex),
           );
         },
       ),
@@ -339,15 +301,10 @@ class _PromoCarousel extends StatelessWidget {
 }
 
 class _PromoCard extends StatelessWidget {
-  const _PromoCard({
-    required this.data,
-    required this.isActive,
-    required this.highContrast,
-  });
+  const _PromoCard({required this.data, required this.isActive});
 
   final _PromoBannerData data;
   final bool isActive;
-  final bool highContrast;
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +319,7 @@ class _PromoCard extends StatelessWidget {
           gradient: LinearGradient(colors: data.colors),
           boxShadow: [
             BoxShadow(
-              color: data.colors.last.withOpacity(0.35),
+              color: data.colors.last.withValues(alpha: 0.35),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -380,12 +337,8 @@ class _PromoCard extends StatelessWidget {
                   child: FilledButton(
                     onPressed: () {},
                     style: FilledButton.styleFrom(
-                      backgroundColor: highContrast
-                          ? const Color(0xFF111827)
-                          : Colors.white,
-                      foregroundColor: highContrast
-                          ? Colors.white
-                          : data.colors.first,
+                      backgroundColor: Colors.white,
+                      foregroundColor: data.colors.first,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       textStyle: const TextStyle(
                         fontWeight: FontWeight.w600,
@@ -411,7 +364,7 @@ class _PromoCard extends StatelessWidget {
             Text(
               data.subtitle,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -424,10 +377,9 @@ class _PromoCard extends StatelessWidget {
 }
 
 class _TrendingDeck extends StatelessWidget {
-  const _TrendingDeck({required this.products, required this.highContrast});
+  const _TrendingDeck({required this.products});
 
   final List<ProductSummary> products;
-  final bool highContrast;
 
   @override
   Widget build(BuildContext context) {
@@ -447,11 +399,9 @@ class _TrendingDeck extends StatelessWidget {
             width: 200,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: highContrast
-                  ? const Color(0xFF1F2937)
-                  : accent.withOpacity(0.12),
+              color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: accent.withOpacity(0.3)),
+              border: Border.all(color: accent.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,7 +437,6 @@ class _TrendingDeck extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: highContrast ? Colors.white : null,
                           ),
                         ),
                       ),
@@ -496,9 +445,7 @@ class _TrendingDeck extends StatelessWidget {
                         _formatPrice(product),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: highContrast
-                              ? Colors.white
-                              : theme.colorScheme.onSurface,
+                          color: theme.colorScheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -527,15 +474,10 @@ class _TrendingDeck extends StatelessWidget {
 }
 
 class _ProductGrid extends StatelessWidget {
-  const _ProductGrid({
-    required this.products,
-    required this.isCompact,
-    required this.highContrast,
-  });
+  const _ProductGrid({required this.products, required this.isCompact});
 
   final List<ProductSummary> products;
   final bool isCompact;
-  final bool highContrast;
 
   @override
   Widget build(BuildContext context) {
@@ -573,11 +515,11 @@ class _ProductGrid extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: highContrast ? const Color(0xFF1F2937) : Colors.white,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -628,7 +570,6 @@ class _ProductGrid extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: highContrast ? Colors.white : null,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -678,11 +619,9 @@ class _ProductGrid extends StatelessWidget {
                                 style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: highContrast
-                                          ? Colors.white
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
                                     ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -741,7 +680,7 @@ class _ProductBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
@@ -760,21 +699,17 @@ class _BottomNavBar extends StatelessWidget {
     required this.items,
     required this.activeIndex,
     required this.onChanged,
-    required this.highContrast,
   });
 
   final List<_NavItem> items;
   final int activeIndex;
   final ValueChanged<int> onChanged;
-  final bool highContrast;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final background = highContrast
-        ? const Color(0xFF0F172A)
-        : colorScheme.surface;
+    final background = colorScheme.surface;
     return LayoutBuilder(
       builder: (context, constraints) {
         final widthPerItem = constraints.maxWidth / items.length;
@@ -814,7 +749,7 @@ class _BottomNavBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -834,7 +769,7 @@ class _BottomNavBar extends StatelessWidget {
                     padding: itemPadding,
                     decoration: BoxDecoration(
                       color: isActive
-                          ? colorScheme.primary.withOpacity(0.12)
+                          ? colorScheme.primary.withValues(alpha: 0.12)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -939,7 +874,6 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   int _activePromoIndex = 0;
   Timer? _promoTimer;
   bool _showCartReminder = true;
-  bool _highContrastMode = false;
   int _activeFilterIndex = 0;
   int _activeNavIndex = 0;
   String _searchQuery = '';
@@ -1118,14 +1052,9 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isCompact = constraints.maxWidth < 500;
-                final textColor = _highContrastMode
-                    ? Colors.white
-                    : theme.colorScheme.onSurface;
-                final surfaceVariant = _highContrastMode
-                    ? const Color(0xFF111827)
-                    : theme.colorScheme.surfaceContainerHighest.withOpacity(
-                        0.8,
-                      );
+                final textColor = theme.colorScheme.onSurface;
+                final surfaceVariant = theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.8);
 
                 return SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -1138,10 +1067,6 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                         _HomeHeader(
                           profile: widget.profile,
                           notificationCount: trendingProducts.isEmpty ? 0 : 3,
-                          highContrast: _highContrastMode,
-                          onContrastChanged: (value) {
-                            setState(() => _highContrastMode = value);
-                          },
                         ),
                         const SizedBox(height: 16),
                         AnimatedSwitcher(
@@ -1160,7 +1085,6 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           banners: _promoBanners,
                           controller: _promoController,
                           activeIndex: _activePromoIndex,
-                          highContrast: _highContrastMode,
                         ),
                         const SizedBox(height: 20),
                         _SectionHeader(
@@ -1177,10 +1101,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                             message: 'No published products yet.',
                           )
                         else
-                          _TrendingDeck(
-                            products: trendingProducts,
-                            highContrast: _highContrastMode,
-                          ),
+                          _TrendingDeck(products: trendingProducts),
                         const SizedBox(height: 24),
                         _CategoryFilter(
                           categories: data.categories,
@@ -1189,30 +1110,11 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           },
                         ),
                         const SizedBox(height: 24),
-                        _SectionHeader(
-                          title: 'Personalized picks',
-                          action: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _highContrastMode
-                                    ? Icons.visibility_rounded
-                                    : Icons.visibility_off_outlined,
-                                size: 18,
-                              ),
-                              Switch.adaptive(
-                                value: _highContrastMode,
-                                onChanged: (value) =>
-                                    setState(() => _highContrastMode = value),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _SectionHeader(title: 'Personalized picks'),
                         const SizedBox(height: 12),
                         _SearchField(
                           focusNode: _searchFocusNode,
                           isFocused: _isSearchFocused,
-                          highContrast: _highContrastMode,
                           controller: _searchController,
                           onClear: _clearSearch,
                           onSubmitted: _handleSearchSubmitted,
@@ -1245,8 +1147,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                             message:
                                 'No personalized products yet. Publish a product to preview the shopper view.',
                           )
-                        else if (hasSearchQuery &&
-                            filteredProducts.isEmpty)
+                        else if (hasSearchQuery && filteredProducts.isEmpty)
                           _EmptyState(
                             message:
                                 'No products found for "$activeQueryLabel". Try a different keyword or clear the search.',
@@ -1255,20 +1156,19 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           _ProductGrid(
                             products: filteredProducts,
                             isCompact: isCompact,
-                            highContrast: _highContrastMode,
                           ),
                         const SizedBox(height: 24),
                         Text(
                           'Load time optimized with lazy content. Images stream after the first frame for faster perceived performance.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: textColor.withOpacity(0.7),
+                            color: textColor.withValues(alpha: 0.7),
                           ),
                         ),
                         const SizedBox(height: 20),
                         Text(
                           'Navigation responds to device width: more than 600px swaps to a rail in the dedicated mobile shell.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: textColor.withOpacity(0.65),
+                            color: textColor.withValues(alpha: 0.65),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -1319,7 +1219,6 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
           items: _navItems,
           activeIndex: _activeNavIndex,
           onChanged: (index) => setState(() => _activeNavIndex = index),
-          highContrast: _highContrastMode,
         ),
       ),
     );
@@ -1346,11 +1245,13 @@ class _CategoryFilterState extends State<_CategoryFilter> {
   IconData _getCategoryIcon(String categoryName) {
     final name = categoryName.toLowerCase();
     if (name.contains('electronic')) return Icons.laptop_chromebook;
-    if (name.contains('fashion') || name.contains('cloth'))
+    if (name.contains('fashion') || name.contains('cloth')) {
       return Icons.checkroom;
+    }
     if (name.contains('home') || name.contains('furniture')) return Icons.home;
-    if (name.contains('food') || name.contains('grocery'))
+    if (name.contains('food') || name.contains('grocery')) {
       return Icons.restaurant;
+    }
     if (name.contains('book')) return Icons.menu_book;
     if (name.contains('sport')) return Icons.sports_soccer;
     if (name.contains('toy')) return Icons.toys;

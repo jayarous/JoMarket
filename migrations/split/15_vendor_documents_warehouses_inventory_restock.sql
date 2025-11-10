@@ -29,7 +29,8 @@ create table if not exists public.inventory (
   reserved int not null default 0,
   safety_stock int not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (variant_id, warehouse_id)
 );
 
 create table if not exists public.restock_requests (

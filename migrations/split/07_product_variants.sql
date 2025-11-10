@@ -5,7 +5,6 @@ create table if not exists public.product_variants (
   sku text not null,
   attributes jsonb not null default '{}'::jsonb,
   price_cents int not null,
-  stock int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (product_id, sku)

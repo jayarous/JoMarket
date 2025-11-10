@@ -9,8 +9,50 @@ create table if not exists public.product_images (
 );
 
 -- Ensure policy can be reapplied idempotently
-drop policy if exists "images_public_read" on public.product_images;
-create policy "images_public_read" on public.product_images
-for select using (true);
+drop policy if exists "product_images_public_active" on public.product_images;
+drop policy if exists "product_images_vendor_manage" on public.product_images;
+
+create policy "product_images_public_active" on public.product_images
+for select using (
+  exists (
+    select 1 from public.products p
+    where p.id = product_images.product_id
+      and p.status = 'active'
+      and p.deleted_at is null
+  )
+);
+
+create policy "product_images_vendor_manage" on public.product_images
+for all using (
+  exists (
+    select 1 from public.products p
+    where p.id = product_images.product_id
+      and (
+        exists (
+          select 1 from public.vendors v
+          where v.id = p.vendor_id and v.owner_user_id = auth.uid()
+        )
+        or exists (
+          select 1 from public.vendor_staff vs
+          where vs.vendor_id = p.vendor_id and vs.user_id = auth.uid()
+        )
+      )
+  )
+) with check (
+  exists (
+    select 1 from public.products p
+    where p.id = product_images.product_id
+      and (
+        exists (
+          select 1 from public.vendors v
+          where v.id = p.vendor_id and v.owner_user_id = auth.uid()
+        )
+        or exists (
+          select 1 from public.vendor_staff vs
+          where vs.vendor_id = p.vendor_id and vs.user_id = auth.uid()
+        )
+      )
+  )
+);
 
 create index if not exists idx_product_images_product on public.product_images(product_id);

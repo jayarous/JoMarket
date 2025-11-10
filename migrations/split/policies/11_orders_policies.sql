@@ -6,15 +6,12 @@
 -- Drop existing policies if present so the file can be reapplied idempotently
 drop policy if exists "orders_shopper_read" on public.orders;
 drop policy if exists "orders_shopper_write" on public.orders;
-drop policy if exists "orders_shopper_update" on public.orders;
 drop policy if exists "orders_vendor_read" on public.orders;
 
 create policy "orders_shopper_read" on public.orders
 for select using (auth.uid() = user_id);
 create policy "orders_shopper_write" on public.orders
 for insert with check (auth.uid() = user_id);
-create policy "orders_shopper_update" on public.orders
-for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "orders_vendor_read" on public.orders
 for select using (

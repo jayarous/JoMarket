@@ -38,6 +38,8 @@ dependencies:
   supabase_flutter: ^1.4.0
   # Load local environment variables during development (do NOT commit .env)
   flutter_dotenv: ^5.0.2
+  # Shared preferences for storing simple data
+  shared_preferences: ^2.2.3
 
 dev_dependencies:
   flutter_test:
