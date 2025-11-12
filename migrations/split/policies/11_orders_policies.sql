@@ -10,14 +10,21 @@ drop policy if exists "orders_vendor_read" on public.orders;
 
 create policy "orders_shopper_read" on public.orders
 for select using (auth.uid() = user_id);
+
 create policy "orders_shopper_write" on public.orders
 for insert with check (auth.uid() = user_id);
 
+-- Fixed: Remove circular dependency by directly checking vendor_staff
+-- without joining through order_items (which itself references orders)
 create policy "orders_vendor_read" on public.orders
 for select using (
   exists (
-    select 1 from public.order_items oi
-    join public.vendor_staff vs on vs.vendor_id = oi.vendor_id
-    where oi.order_id = public.orders.id and vs.user_id = auth.uid()
+    select 1 from public.vendor_staff vs
+    where vs.user_id = auth.uid()
+    and exists (
+      select 1 from public.order_items oi
+      where oi.order_id = public.orders.id
+      and oi.vendor_id = vs.vendor_id
+    )
   )
 );

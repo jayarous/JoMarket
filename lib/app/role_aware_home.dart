@@ -9,6 +9,11 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
+import '../profile/profile_screen.dart';
+import 'favorites_screen.dart';
+import 'product_detail_screen.dart';
+import 'product_search_screen.dart';
+import 'shopping_cart_screen.dart';
 
 part 'role_aware_home/role_aware_home_shell.dart';
 part 'role_aware_home/role_dashboard.dart';

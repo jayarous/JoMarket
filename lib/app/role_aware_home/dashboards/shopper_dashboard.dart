@@ -4,11 +4,17 @@ class ShopperDashboard extends StatefulWidget {
   const ShopperDashboard({
     required this.profile,
     required this.repository,
+    required this.profileRepository,
+    required this.onReloadRequested,
+    this.userEmail,
     super.key,
   });
 
   final UserProfile profile;
   final DashboardRepository repository;
+  final ProfileRepository profileRepository;
+  final VoidCallback onReloadRequested;
+  final String? userEmail;
 
   @override
   State<ShopperDashboard> createState() => _ShopperDashboardState();
@@ -106,6 +112,7 @@ class _SearchField extends StatelessWidget {
     required this.controller,
     required this.onClear,
     this.onSubmitted,
+    this.onAdvancedSearch,
   });
 
   final FocusNode focusNode;
@@ -113,6 +120,7 @@ class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onClear;
   final ValueChanged<String>? onSubmitted;
+  final VoidCallback? onAdvancedSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -168,9 +176,10 @@ class _SearchField extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
-                const _SuffixIconButton(
-                  icon: Icons.mic_none_rounded,
-                  tooltip: 'Voice search',
+                _SuffixIconButton(
+                  icon: Icons.tune_rounded,
+                  tooltip: 'Advanced search',
+                  onTap: onAdvancedSearch,
                 ),
                 const SizedBox(width: 4),
                 const _SuffixIconButton(
@@ -283,18 +292,16 @@ class _PromoCarousel extends StatelessWidget {
     }
     return SizedBox(
       height: 140,
-      child: PageView.builder(
-        controller: controller,
-        itemCount: banners.length,
-        itemBuilder: (context, index) {
-          final banner = banners[index];
-          return Padding(
-            padding: EdgeInsets.only(
-              right: index == banners.length - 1 ? 0 : 12,
-            ),
-            child: _PromoCard(data: banner, isActive: index == activeIndex),
-          );
-        },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: PageView.builder(
+          controller: controller,
+          itemCount: banners.length,
+          itemBuilder: (context, index) {
+            final banner = banners[index];
+            return _PromoCard(data: banner, isActive: index == activeIndex);
+          },
+        ),
       ),
     );
   }
@@ -377,9 +384,17 @@ class _PromoCard extends StatelessWidget {
 }
 
 class _TrendingDeck extends StatelessWidget {
-  const _TrendingDeck({required this.products});
+  const _TrendingDeck({
+    required this.products,
+    required this.userId,
+    required this.favoritesSyncToken,
+    this.onFavoriteStatusChanged,
+  });
 
   final List<ProductSummary> products;
+  final String userId;
+  final int favoritesSyncToken;
+  final ValueChanged<bool>? onFavoriteStatusChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -395,76 +410,106 @@ class _TrendingDeck extends StatelessWidget {
           final product = products[index];
           final accent =
               Colors.primaries[index % Colors.primaries.length].shade400;
-          return Container(
-            width: 200,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: accent.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Bestseller',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontSize: 10,
-                    ),
+          return InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => ProductDetailScreen(
+                    productId: product.id,
+                    userId: userId,
+                    repository: DashboardRepository(Supabase.instance.client),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Flexible(
-                  fit: FlexFit.tight,
-                  child: Column(
+              );
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 200,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: accent.withValues(alpha: 0.3)),
+              ),
+              child: Stack(
+                children: [
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Flexible(
-                        child: Text(
-                          product.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatPrice(product),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Bestseller',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 28,
-                        child: FilledButton.tonal(
-                          onPressed: () {},
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            textStyle: const TextStyle(fontSize: 12),
-                          ),
-                          child: const Text('View deal'),
+                      Flexible(
+                        fit: FlexFit.tight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                product.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _formatPrice(product),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 28,
+                              child: FilledButton.tonal(
+                                onPressed: () {},
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  textStyle: const TextStyle(fontSize: 12),
+                                ),
+                                child: const Text('View deal'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                  child: _FavoriteButton(
+                    productId: product.id,
+                    userId: userId,
+                    syncToken: favoritesSyncToken,
+                    onStatusChanged: onFavoriteStatusChanged,
+                  ),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -474,10 +519,21 @@ class _TrendingDeck extends StatelessWidget {
 }
 
 class _ProductGrid extends StatelessWidget {
-  const _ProductGrid({required this.products, required this.isCompact});
+  const _ProductGrid({
+    required this.products,
+    required this.isCompact,
+    required this.userId,
+    required this.favoritesSyncToken,
+    this.onFavoriteStatusChanged,
+    this.onAddToCart,
+  });
 
   final List<ProductSummary> products;
   final bool isCompact;
+  final String userId;
+  final int favoritesSyncToken;
+  final ValueChanged<bool>? onFavoriteStatusChanged;
+  final Future<void> Function(ProductSummary product)? onAddToCart;
 
   @override
   Widget build(BuildContext context) {
@@ -512,155 +568,174 @@ class _ProductGrid extends StatelessWidget {
           builder: (context, scale, child) {
             return Transform.scale(scale: scale, child: child);
           },
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => ProductDetailScreen(
+                    productId: product.id,
+                    userId: userId,
+                    repository: DashboardRepository(Supabase.instance.client),
+                  ),
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AspectRatio(
-                  aspectRatio: 1.2,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors
-                              .primaries[index % Colors.primaries.length]
-                              .shade200,
-                          Colors
-                              .primaries[(index + 3) % Colors.primaries.length]
-                              .shade100,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 1.2,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors
+                                .primaries[index % Colors.primaries.length]
+                                .shade200,
+                            Colors
+                                .primaries[(index + 3) %
+                                    Colors.primaries.length]
+                                .shade100,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                       ),
-                    ),
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: IconButton(
-                        icon: const Icon(Icons.favorite_border, size: 16),
-                        color: Colors.white,
-                        onPressed: () {},
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: _FavoriteButton(
+                          productId: product.id,
+                          userId: userId,
+                          syncToken: favoritesSyncToken,
+                          onStatusChanged: onFavoriteStatusChanged,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                // Make the middle content expand so the CTA stays anchored to the bottom
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(height: 6),
+                  // Make the middle content expand so the CTA stays anchored to the bottom
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.star,
-                            size: 12,
-                            color: Colors.amberAccent.shade700,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            rating.toStringAsFixed(1),
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                          Text(
-                            ' ($reviewCount)',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: [
-                          if (hasPrime)
-                            _ProductBadge(
-                              label: 'Prime',
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          if (shipsToday)
-                            const _ProductBadge(
-                              label: 'Ships today',
-                              color: Color(0xFF10B981),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      if (price != null)
+                        const SizedBox(height: 2),
                         Row(
                           children: [
-                            Expanded(
-                              child: Text(
-                                '${product.currency} ${price.toStringAsFixed(2)}',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface,
-                                    ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            Icon(
+                              Icons.star,
+                              size: 12,
+                              color: Colors.amberAccent.shade700,
                             ),
-                            if (oldPrice != null)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 6),
+                            const SizedBox(width: 2),
+                            Text(
+                              rating.toStringAsFixed(1),
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                            Text(
+                              ' ($reviewCount)',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 2,
+                          children: [
+                            if (hasPrime)
+                              _ProductBadge(
+                                label: 'Prime',
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            if (shipsToday)
+                              const _ProductBadge(
+                                label: 'Ships today',
+                                color: Color(0xFF10B981),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        if (price != null)
+                          Row(
+                            children: [
+                              Expanded(
                                 child: Text(
-                                  '${product.currency} ${oldPrice.toStringAsFixed(2)}',
-                                  style: Theme.of(context).textTheme.bodySmall
+                                  '${product.currency} ${price.toStringAsFixed(2)}',
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
-                                        decoration: TextDecoration.lineThrough,
-                                        color: Colors.grey,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
                                       ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  width: double.infinity,
-                  height: 28,
-                  child: FilledButton.tonalIcon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.add_shopping_cart_rounded, size: 14),
-                    label: const Text(
-                      'Add to cart',
-                      style: TextStyle(fontSize: 12),
+                              if (oldPrice != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Text(
+                                    '${product.currency} ${oldPrice.toStringAsFixed(2)}',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                          color: Colors.grey,
+                                        ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ),
+                      ],
                     ),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 28,
+                    child: FilledButton.tonalIcon(
+                      onPressed: onAddToCart == null
+                          ? null
+                          : () => onAddToCart!(product),
+                      icon: const Icon(
+                        Icons.add_shopping_cart_rounded,
+                        size: 14,
+                      ),
+                      label: const Text(
+                        'Add to cart',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -699,11 +774,15 @@ class _BottomNavBar extends StatelessWidget {
     required this.items,
     required this.activeIndex,
     required this.onChanged,
+    required this.cartItemCount,
+    required this.favoritesCount,
   });
 
   final List<_NavItem> items;
   final int activeIndex;
   final ValueChanged<int> onChanged;
+  final int cartItemCount;
+  final int favoritesCount;
 
   @override
   Widget build(BuildContext context) {
@@ -786,7 +865,32 @@ class _BottomNavBar extends StatelessWidget {
                                   ? colorScheme.primary
                                   : colorScheme.onSurfaceVariant,
                             ),
-                            if (item.label == 'Cart')
+                            if (item.label == 'Favorites' && favoritesCount > 0)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    favoritesCount > 9
+                                        ? '9+'
+                                        : favoritesCount.toString(),
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (item.label == 'Cart' && cartItemCount > 0)
                               Positioned(
                                 right: 0,
                                 top: 0,
@@ -799,9 +903,11 @@ class _BottomNavBar extends StatelessWidget {
                                     color: colorScheme.error,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: const Text(
-                                    '2',
-                                    style: TextStyle(
+                                  child: Text(
+                                    cartItemCount > 9
+                                        ? '9+'
+                                        : cartItemCount.toString(),
+                                    style: const TextStyle(
                                       fontSize: 10,
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -867,9 +973,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   late Future<ShopperDashboardData> _future;
   final FocusNode _searchFocusNode = FocusNode();
   final TextEditingController _searchController = TextEditingController();
-  final PageController _promoController = PageController(
-    viewportFraction: 0.86,
-  );
+  final PageController _promoController = PageController(viewportFraction: 1.0);
   bool _isSearchFocused = false;
   int _activePromoIndex = 0;
   Timer? _promoTimer;
@@ -877,6 +981,9 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   int _activeFilterIndex = 0;
   int _activeNavIndex = 0;
   String _searchQuery = '';
+  int _cartItemCount = 0;
+  int _favoritesCount = 0;
+  int _favoritesStatusVersion = 0;
 
   static const List<String> _filters = [
     'All',
@@ -888,7 +995,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
 
   static const List<_NavItem> _navItems = [
     _NavItem(icon: Icons.home_filled, label: 'Home'),
-    _NavItem(icon: Icons.dashboard_customize_rounded, label: 'Categories'),
+    _NavItem(icon: Icons.favorite_rounded, label: 'Favorites'),
     _NavItem(icon: Icons.local_fire_department_rounded, label: 'Deals'),
     _NavItem(icon: Icons.shopping_cart_rounded, label: 'Cart'),
     _NavItem(icon: Icons.person_rounded, label: 'Profile'),
@@ -926,6 +1033,120 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _searchController.addListener(_handleSearchTextChanged);
     _promoController.addListener(_handlePromoPosition);
     _startPromoAutoScroll();
+    _loadCartCount();
+    _loadFavoritesCount();
+  }
+
+  Future<void> _loadCartCount() async {
+    try {
+      final cart = await widget.repository.getOrCreateCart(
+        widget.profile.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _cartItemCount = cart.itemCount;
+        });
+      }
+    } catch (e) {
+      // Silently fail - cart count is not critical
+      if (mounted) {
+        setState(() {
+          _cartItemCount = 0;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadFavoritesCount() async {
+    try {
+      final favorites = await widget.repository.getFavorites(
+        widget.profile.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _favoritesCount = favorites.length;
+        });
+      }
+    } catch (e) {
+      // Silently fail - favorites count is not critical
+      if (mounted) {
+        setState(() {
+          _favoritesCount = 0;
+        });
+      }
+    }
+  }
+
+  void _handleFavoriteStatusChanged(bool isFavorite) {
+    if (!mounted) return;
+    setState(() {
+      if (isFavorite) {
+        _favoritesCount += 1;
+      } else if (_favoritesCount > 0) {
+        _favoritesCount -= 1;
+      }
+    });
+  }
+
+  Future<void> _handleAddToCart(ProductSummary product) async {
+    if (product.priceCents == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Price unavailable for ${product.name}'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await widget.repository.addToCart(
+        userId: widget.profile.userId,
+        productId: product.id,
+        quantity: 1,
+        unitPriceCents: product.priceCents!,
+        currency: product.currency,
+      );
+
+      await _loadCartCount();
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Added ${product.name} to cart'),
+            duration: const Duration(seconds: 2),
+            action: SnackBarAction(
+              label: 'View Cart',
+              onPressed: () {
+                Navigator.of(context)
+                    .push(
+                      MaterialPageRoute<void>(
+                        builder: (context) => ShoppingCartScreen(
+                          userId: widget.profile.userId,
+                          repository: widget.repository,
+                        ),
+                      ),
+                    )
+                    .then((_) {
+                  if (mounted) {
+                    _loadCartCount();
+                  }
+                });
+              },
+            ),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add to cart: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 
   @override
@@ -992,14 +1213,34 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   }
 
   List<ProductSummary> _filteredProducts(List<ProductSummary> products) {
+    var filtered = products;
+
+    // Apply category filter
+    final filterName = _filters[_activeFilterIndex];
+    if (filterName != 'All') {
+      filtered = filtered.where((product) {
+        // Match filter name with category name (case-insensitive)
+        return product.categoryName?.toLowerCase() == filterName.toLowerCase();
+      }).toList();
+    }
+
+    // Apply search query
     final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return products;
-    return products.where((product) {
-      final nameMatch = product.name.toLowerCase().contains(query);
-      final priceLabel = _formatPrice(product).toLowerCase();
-      final idMatch = product.id.toLowerCase().contains(query);
-      return nameMatch || idMatch || priceLabel.contains(query);
-    }).toList();
+    if (query.isNotEmpty) {
+      filtered = filtered.where((product) {
+        final nameMatch = product.name.toLowerCase().contains(query);
+        final categoryMatch =
+            product.categoryName?.toLowerCase().contains(query) ?? false;
+        final priceLabel = _formatPrice(product).toLowerCase();
+        final idMatch = product.id.toLowerCase().contains(query);
+        return nameMatch ||
+            categoryMatch ||
+            idMatch ||
+            priceLabel.contains(query);
+      }).toList();
+    }
+
+    return filtered;
   }
 
   void _reload() {
@@ -1014,6 +1255,23 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       _future = future;
     });
     return future;
+  }
+
+  Future<void> _openProfileFromNav() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ProfileScreen(
+          profile: widget.profile,
+          repository: widget.profileRepository,
+          dashboardRepository: widget.repository,
+          email: widget.userEmail,
+          onReloadRequested: widget.onReloadRequested,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _activeNavIndex = 0);
   }
 
   @override
@@ -1101,7 +1359,13 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                             message: 'No published products yet.',
                           )
                         else
-                          _TrendingDeck(products: trendingProducts),
+                      _TrendingDeck(
+                        products: trendingProducts,
+                        userId: widget.profile.userId,
+                        favoritesSyncToken: _favoritesStatusVersion,
+                        onFavoriteStatusChanged:
+                            _handleFavoriteStatusChanged,
+                      ),
                         const SizedBox(height: 24),
                         _CategoryFilter(
                           categories: data.categories,
@@ -1118,6 +1382,16 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           controller: _searchController,
                           onClear: _clearSearch,
                           onSubmitted: _handleSearchSubmitted,
+                          onAdvancedSearch: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (context) => ProductSearchScreen(
+                                  userId: widget.profile.userId,
+                                  categories: data.categories,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                         const SizedBox(height: 12),
                         SingleChildScrollView(
@@ -1153,9 +1427,14 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                                 'No products found for "$activeQueryLabel". Try a different keyword or clear the search.',
                           )
                         else
-                          _ProductGrid(
-                            products: filteredProducts,
-                            isCompact: isCompact,
+                      _ProductGrid(
+                        products: filteredProducts,
+                        isCompact: isCompact,
+                        userId: widget.profile.userId,
+                        favoritesSyncToken: _favoritesStatusVersion,
+                        onFavoriteStatusChanged:
+                            _handleFavoriteStatusChanged,
+                        onAddToCart: _handleAddToCart,
                           ),
                         const SizedBox(height: 24),
                         Text(
@@ -1218,7 +1497,54 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
         child: _BottomNavBar(
           items: _navItems,
           activeIndex: _activeNavIndex,
-          onChanged: (index) => setState(() => _activeNavIndex = index),
+          cartItemCount: _cartItemCount,
+          favoritesCount: _favoritesCount,
+          onChanged: (index) {
+            setState(() => _activeNavIndex = index);
+
+            // Handle Favorites navigation (index 1)
+            if (index == 1) {
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute<void>(
+                      builder: (context) =>
+                          FavoritesScreen(userId: widget.profile.userId),
+                    ),
+                  )
+                  .then((_) {
+                    if (!mounted) return;
+                    // Reset to home when returning, bump sync token, and reload favorites count
+                    setState(() {
+                      _activeNavIndex = 0;
+                      _favoritesStatusVersion += 1;
+                    });
+                    _loadFavoritesCount();
+                  });
+            }
+
+            // Handle cart navigation (index 3)
+            if (index == 3) {
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => ShoppingCartScreen(
+                        userId: widget.profile.userId,
+                        repository: widget.repository,
+                      ),
+                    ),
+                  )
+                  .then((_) {
+                    // Reset to home when returning and reload cart count
+                    setState(() => _activeNavIndex = 0);
+                    _loadCartCount();
+                  });
+            }
+
+            // Handle profile navigation (index 4)
+            if (index == 4) {
+              _openProfileFromNav();
+            }
+          },
         ),
       ),
     );
@@ -1366,6 +1692,142 @@ class _CategoryItem extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FavoriteButton extends StatefulWidget {
+  const _FavoriteButton({
+    required this.productId,
+    required this.userId,
+    required this.syncToken,
+    this.onStatusChanged,
+  });
+
+  final String productId;
+  final String userId;
+  final int syncToken;
+  final ValueChanged<bool>? onStatusChanged;
+
+  @override
+  State<_FavoriteButton> createState() => _FavoriteButtonState();
+}
+
+class _FavoriteButtonState extends State<_FavoriteButton>
+    with SingleTickerProviderStateMixin {
+  bool _isFavorite = false;
+  bool _isLoading = true;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _loadFavoriteStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavoriteButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.syncToken != oldWidget.syncToken) {
+      _loadFavoriteStatus();
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadFavoriteStatus() async {
+    if (!_isLoading && mounted) {
+      setState(() => _isLoading = true);
+    } else {
+      _isLoading = true;
+    }
+    try {
+      final repository = DashboardRepository(Supabase.instance.client);
+      final isFavorite = await repository.isFavorite(
+        userId: widget.userId,
+        productId: widget.productId,
+      );
+      if (mounted) {
+        setState(() {
+          _isFavorite = isFavorite;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final repository = DashboardRepository(Supabase.instance.client);
+      final wasFavorite = _isFavorite;
+
+      if (wasFavorite) {
+        await repository.removeFavorite(
+          userId: widget.userId,
+          productId: widget.productId,
+        );
+      } else {
+        await repository.addFavorite(
+          userId: widget.userId,
+          productId: widget.productId,
+        );
+        _animationController.forward().then((_) {
+          _animationController.reverse();
+        });
+      }
+
+      if (mounted) {
+        final nextStatus = !wasFavorite;
+        setState(() {
+          _isFavorite = nextStatus;
+          _isLoading = false;
+        });
+        widget.onStatusChanged?.call(nextStatus);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update favorite: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: IconButton(
+        icon: Icon(
+          _isFavorite ? Icons.favorite : Icons.favorite_border,
+          size: 16,
+        ),
+        color: _isFavorite ? Colors.red : Colors.white,
+        onPressed: _isLoading ? null : _toggleFavorite,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
       ),
     );
   }

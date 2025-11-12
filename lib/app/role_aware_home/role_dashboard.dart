@@ -47,23 +47,13 @@ class _RoleDashboardState extends State<RoleDashboard> {
       return RoleAssignment.guest();
     }
 
-    const priority = [
-      AppUserRole.admin,
-      AppUserRole.vendorOwner,
-      AppUserRole.vendorStaff,
-      AppUserRole.delivery,
-      AppUserRole.shopper,
-    ];
-    for (final role in priority) {
-      final match = roles.firstWhere(
-        (item) => item.role == role,
-        orElse: () => roles.first,
-      );
-      if (match.role == role) {
-        return match;
-      }
-    }
-    return roles.first;
+    // Always default to shopper view for better UX
+    // Users can switch to vendor/delivery/admin views via the role switcher
+    final shopperRole = roles.firstWhere(
+      (item) => item.role == AppUserRole.shopper,
+      orElse: () => roles.first,
+    );
+    return shopperRole;
   }
 
   Future<void> _signOut() async {
@@ -92,43 +82,42 @@ class _RoleDashboardState extends State<RoleDashboard> {
     }
   }
 
-  Future<void> _editProfile() async {
-    final updated = await showModalBottomSheet<UserProfile>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => ProfileEditSheet(
-        profile: widget.profile,
-        repository: widget.profileRepository,
-      ),
-    );
-
-    if (updated != null && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
-      widget.onReloadRequested();
+  IconData _getRoleIcon(AppUserRole role) {
+    switch (role) {
+      case AppUserRole.shopper:
+        return Icons.shopping_bag;
+      case AppUserRole.vendorOwner:
+      case AppUserRole.vendorStaff:
+        return Icons.store;
+      case AppUserRole.delivery:
+        return Icons.local_shipping;
+      case AppUserRole.admin:
+        return Icons.admin_panel_settings;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isShopperView = _activeRole.role == AppUserRole.shopper;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('JoMarket'),
-            Text(
-              _activeRole.displayLabel,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
+            if (!isShopperView)
+              Text(
+                _activeRole.displayLabel,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
           ],
         ),
         actions: [
           if (widget.roles.length > 1)
             PopupMenuButton<RoleAssignment>(
-              tooltip: 'Switch role',
-              icon: const Icon(Icons.switch_account),
+              tooltip: 'Switch view',
+              icon: Icon(_getRoleIcon(_activeRole.role), size: 28),
               onSelected: (role) {
                 setState(() {
                   _activeRole = role;
@@ -139,7 +128,37 @@ class _RoleDashboardState extends State<RoleDashboard> {
                     .map(
                       (role) => PopupMenuItem<RoleAssignment>(
                         value: role,
-                        child: Text(role.displayLabel),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _getRoleIcon(role.role),
+                              size: 20,
+                              color: role.role == _activeRole.role
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                role.displayLabel,
+                                style: TextStyle(
+                                  fontWeight: role.role == _activeRole.role
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: role.role == _activeRole.role
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            if (role.role == _activeRole.role)
+                              Icon(
+                                Icons.check,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                          ],
+                        ),
                       ),
                     )
                     .toList();
@@ -147,9 +166,27 @@ class _RoleDashboardState extends State<RoleDashboard> {
             ),
           if (widget.session != null) ...[
             IconButton(
-              tooltip: 'Edit profile',
+              tooltip: 'Profile',
               icon: const Icon(Icons.account_circle),
-              onPressed: _editProfile,
+              onPressed: () {
+                // Show quick feedback so it's obvious the button was tapped,
+                // then navigate to the Profile screen.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Opening profile...')),
+                );
+
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => ProfileScreen(
+                      profile: widget.profile,
+                      repository: widget.profileRepository,
+                      dashboardRepository: widget.dashboardRepository,
+                      email: widget.session?.user.email,
+                      onReloadRequested: widget.onReloadRequested,
+                    ),
+                  ),
+                );
+              },
             ),
             IconButton(
               tooltip: 'Reload profile',
@@ -181,6 +218,9 @@ class _RoleDashboardState extends State<RoleDashboard> {
           role: _activeRole,
           profile: widget.profile,
           repository: widget.dashboardRepository,
+          profileRepository: widget.profileRepository,
+          onReloadRequested: widget.onReloadRequested,
+          userEmail: widget.session?.user.email,
         ),
       ),
     );
@@ -192,18 +232,30 @@ class _RoleContentCard extends StatelessWidget {
     required this.role,
     required this.profile,
     required this.repository,
+    required this.profileRepository,
+    required this.onReloadRequested,
+    this.userEmail,
   });
 
   final RoleAssignment role;
   final UserProfile profile;
   final DashboardRepository repository;
+  final ProfileRepository profileRepository;
+  final VoidCallback onReloadRequested;
+  final String? userEmail;
 
   @override
   Widget build(BuildContext context) {
     late Widget body;
     switch (role.role) {
       case AppUserRole.shopper:
-        body = ShopperDashboard(profile: profile, repository: repository);
+        body = ShopperDashboard(
+          profile: profile,
+          repository: repository,
+          profileRepository: profileRepository,
+          onReloadRequested: onReloadRequested,
+          userEmail: userEmail,
+        );
         break;
       case AppUserRole.vendorOwner:
       case AppUserRole.vendorStaff:

@@ -120,7 +120,9 @@ class _VendorDashboardState extends State<VendorDashboard> {
                   leading: const Icon(Icons.local_shipping_outlined),
                   title: Text('Shipment ${shipment.id.substring(0, 6)}…'),
                   subtitle: Text(
-                    'Order ${shipment.orderId.substring(0, 6)}… · ${shipment.status}',
+                    shipment.orderId != null
+                        ? 'Order ${shipment.orderId!.substring(0, 6)}… · ${shipment.status}'
+                        : 'Status: ${shipment.status}',
                   ),
                   trailing: Text(
                     'Updated ${_timeAgo(shipment.updatedAt)}',
