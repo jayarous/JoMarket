@@ -40,6 +40,8 @@ dependencies:
   flutter_dotenv: ^5.0.2
   # Shared preferences for storing simple data
   shared_preferences: ^2.2.3
+  # Image picker for avatar uploads
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:

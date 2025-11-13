@@ -111,6 +111,103 @@ class OrderSummary {
   }
 }
 
+class OrderItem {
+  OrderItem({
+    required this.id,
+    required this.orderId,
+    required this.productId,
+    this.variantId,
+    required this.vendorId,
+    required this.name,
+    required this.quantity,
+    required this.unitPriceCents,
+  });
+
+  final String id;
+  final String orderId;
+  final String productId;
+  final String? variantId;
+  final String vendorId;
+  final String name;
+  final int quantity;
+  final int unitPriceCents;
+
+  int get totalCents => quantity * unitPriceCents;
+
+  factory OrderItem.fromMap(Map<String, dynamic> map) {
+    return OrderItem(
+      id: map['id'] as String,
+      orderId: map['order_id'] as String,
+      productId: map['product_id'] as String,
+      variantId: map['variant_id'] as String?,
+      vendorId: map['vendor_id'] as String,
+      name: map['name'] as String? ?? 'Product',
+      quantity: map['quantity'] as int? ?? 1,
+      unitPriceCents: map['unit_price_cents'] as int? ?? 0,
+    );
+  }
+}
+
+class OrderDetail {
+  OrderDetail({
+    required this.id,
+    required this.orderNumber,
+    required this.userId,
+    required this.status,
+    required this.currency,
+    required this.subtotalCents,
+    required this.shippingCents,
+    required this.taxCents,
+    required this.discountCents,
+    required this.totalCents,
+    required this.createdAt,
+    required this.updatedAt,
+    this.shippingAddress,
+    this.billingAddress,
+    this.notes,
+    this.items = const [],
+  });
+
+  final String id;
+  final String orderNumber;
+  final String userId;
+  final String status;
+  final String currency;
+  final int subtotalCents;
+  final int shippingCents;
+  final int taxCents;
+  final int discountCents;
+  final int totalCents;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final Address? shippingAddress;
+  final Address? billingAddress;
+  final String? notes;
+  final List<OrderItem> items;
+
+  factory OrderDetail.fromMap(Map<String, dynamic> map) {
+    return OrderDetail(
+      id: map['id'] as String,
+      orderNumber: map['order_number'] as String? ?? 'N/A',
+      userId: map['user_id'] as String,
+      status: map['status'] as String? ?? 'pending',
+      currency: map['currency'] as String? ?? 'JOD',
+      subtotalCents: map['subtotal_cents'] as int? ?? 0,
+      shippingCents: map['shipping_cents'] as int? ?? 0,
+      taxCents: map['tax_cents'] as int? ?? 0,
+      discountCents: map['discount_cents'] as int? ?? 0,
+      totalCents: map['total_cents'] as int? ?? 0,
+      createdAt:
+          DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(map['updated_at'] as String? ?? '') ??
+          DateTime.now(),
+      notes: map['notes'] as String?,
+    );
+  }
+}
+
 class DeliveryStaffInfo {
   DeliveryStaffInfo({
     required this.staffId,
@@ -197,6 +294,30 @@ class ProductDetail {
   }
 }
 
+enum CartItemIssue {
+  outOfStock,
+  priceChanged,
+  productUnavailable,
+}
+
+class CartItemValidation {
+  CartItemValidation({
+    required this.cartItemId,
+    this.issue,
+    this.currentPriceCents,
+    this.availableQuantity,
+    this.message,
+  });
+
+  final String cartItemId;
+  final CartItemIssue? issue;
+  final int? currentPriceCents;
+  final int? availableQuantity;
+  final String? message;
+
+  bool get hasIssue => issue != null;
+}
+
 class CartItem {
   CartItem({
     required this.id,
@@ -212,6 +333,7 @@ class CartItem {
     required this.productName,
     this.productSlug,
     this.vendorName,
+    this.validation,
   });
 
   final String id;
@@ -227,6 +349,7 @@ class CartItem {
   final String productName;
   final String? productSlug;
   final String? vendorName;
+  final CartItemValidation? validation;
 
   factory CartItem.fromMap(Map<String, dynamic> map) {
     return CartItem(
@@ -262,6 +385,7 @@ class CartItem {
     String? productName,
     String? productSlug,
     String? vendorName,
+    CartItemValidation? validation,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -277,6 +401,7 @@ class CartItem {
       productName: productName ?? this.productName,
       productSlug: productSlug ?? this.productSlug,
       vendorName: vendorName ?? this.vendorName,
+      validation: validation ?? this.validation,
     );
   }
 }
@@ -429,6 +554,64 @@ class CheckoutCharges {
       subtotalCents - discountCents + shippingCents + taxCents;
 }
 
+class ShippingOption {
+  ShippingOption({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.feeCents,
+    required this.estimatedDays,
+    required this.isActive,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+  final int feeCents;
+  final int estimatedDays;
+  final bool isActive;
+
+  factory ShippingOption.fromMap(Map<String, dynamic> map) {
+    return ShippingOption(
+      id: map['id'] as String,
+      label: map['label'] as String? ?? 'Shipping',
+      description: map['description'] as String? ?? '',
+      feeCents: map['fee_cents'] as int? ?? 0,
+      estimatedDays: map['estimated_days'] as int? ?? 3,
+      isActive: map['is_active'] as bool? ?? true,
+    );
+  }
+}
+
+class PaymentIntent {
+  PaymentIntent({
+    required this.id,
+    required this.amountCents,
+    required this.currency,
+    required this.status,
+    this.clientSecret,
+    this.provider,
+  });
+
+  final String id;
+  final int amountCents;
+  final String currency;
+  final String status;
+  final String? clientSecret;
+  final String? provider;
+
+  factory PaymentIntent.fromMap(Map<String, dynamic> map) {
+    return PaymentIntent(
+      id: map['id'] as String,
+      amountCents: map['amount_cents'] as int,
+      currency: map['currency'] as String? ?? 'JOD',
+      status: map['status'] as String? ?? 'pending',
+      clientSecret: map['client_secret'] as String?,
+      provider: map['provider'] as String?,
+    );
+  }
+}
+
 enum CheckoutPaymentMethod { card, cashOnDelivery }
 
 class CheckoutOrderReceipt {
@@ -493,10 +676,12 @@ class ShopperDashboardData {
   ShopperDashboardData({
     required this.categories,
     required this.featuredProducts,
+    required this.promos,
   });
 
   final List<CategorySummary> categories;
   final List<ProductSummary> featuredProducts;
+  final List<HomePromo> promos;
 }
 
 class VendorDashboardData {
@@ -516,4 +701,73 @@ class DeliveryDashboardData {
   final DeliveryStaffInfo? staffInfo;
   final List<ShipmentSummary> assignedShipments;
   final List<ShipmentSummary> marketplaceShipments;
+}
+
+class HomePromo {
+  HomePromo({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.ctaLabel,
+    this.ctaAction,
+    this.primaryColorHex,
+    this.secondaryColorHex,
+    this.iconName,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final String ctaLabel;
+  final String? ctaAction;
+  final String? primaryColorHex;
+  final String? secondaryColorHex;
+  final String? iconName;
+
+  factory HomePromo.fromMap(Map<String, dynamic> map) {
+    return HomePromo(
+      id: map['id'] as String,
+      title: map['title'] as String? ?? 'Untitled promo',
+      subtitle: map['subtitle'] as String? ?? '',
+      ctaLabel: map['cta_label'] as String? ?? 'Explore',
+      ctaAction: map['cta_action'] as String?,
+      primaryColorHex: map['primary_color'] as String?,
+      secondaryColorHex: map['secondary_color'] as String?,
+      iconName: map['icon_name'] as String?,
+    );
+  }
+}
+
+class ProductReview {
+  ProductReview({
+    required this.id,
+    required this.productId,
+    required this.userId,
+    required this.rating,
+    this.comment,
+    this.userName,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String productId;
+  final String userId;
+  final int rating;
+  final String? comment;
+  final String? userName;
+  final DateTime createdAt;
+
+  factory ProductReview.fromMap(Map<String, dynamic> map) {
+    return ProductReview(
+      id: map['id'] as String,
+      productId: map['product_id'] as String,
+      userId: map['user_id'] as String,
+      rating: map['rating'] as int? ?? 0,
+      comment: map['comment'] as String?,
+      userName: map['user_name'] as String?,
+      createdAt:
+          DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
 }

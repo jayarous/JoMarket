@@ -4,6 +4,8 @@ import '../dashboard/dashboard_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../app/order_history_screen.dart';
+import 'package:jo_market/app/widgets/profile_avatar.dart';
+import 'package:jo_market/app/widgets/profile_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -11,6 +13,7 @@ class ProfileScreen extends StatefulWidget {
     required this.repository,
     required this.dashboardRepository,
     this.email,
+    this.roles = const [],
     required this.onReloadRequested,
     super.key,
   });
@@ -19,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
   final ProfileRepository repository;
   final DashboardRepository dashboardRepository;
   final String? email;
+  final List<RoleAssignment> roles;
   final VoidCallback onReloadRequested;
 
   @override
@@ -27,7 +31,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
-  bool _saving = false;
 
   @override
   void initState() {
@@ -35,38 +38,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _profile = widget.profile;
   }
 
-  Future<void> _editProfileFlow(
-    String name,
-    String phone,
-    String country,
-  ) async {
-    setState(() => _saving = true);
-    try {
-      final updated = await widget.repository.updateProfile(
-        userId: _profile.userId,
-        update: UserProfileUpdate(
-          fullName: name.trim().isEmpty ? null : name.trim(),
-          phone: phone.trim().isEmpty ? null : phone.trim(),
-          defaultCountry: country.trim().isEmpty ? null : country.trim(),
-        ),
-      );
+  Future<void> _showEditDialog(BuildContext context) async {
+    final result = await showModalBottomSheet<UserProfile>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) =>
+          ProfileEditSheet(profile: _profile, repository: widget.repository),
+    );
 
+    if (result != null) {
       if (!mounted) return;
       setState(() {
-        _profile = updated;
-        _saving = false;
+        _profile = result;
       });
       widget.onReloadRequested();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save profile: $e')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      }
     }
+  }
+
+  void _handleRoleEnrollment() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Role enrollment coming soon! Contact admin for access.'),
+      ),
+    );
   }
 
   @override
@@ -79,108 +78,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: _saving
-                ? null
-                : () async {
-                    final nameController = TextEditingController(
-                      text: _profile.fullName ?? '',
-                    );
-                    final phoneController = TextEditingController(
-                      text: _profile.phone ?? '',
-                    );
-                    final countryController = TextEditingController(
-                      text: _profile.defaultCountry ?? 'JO',
-                    );
-
-                    final result = await showModalBottomSheet<bool>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (context) {
-                        final bottomInset = MediaQuery.of(
-                          context,
-                        ).viewInsets.bottom;
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            bottom: bottomInset,
-                            left: 16,
-                            right: 16,
-                            top: 24,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Edit profile',
-                                style: Theme.of(context).textTheme.titleLarge,
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              TextField(
-                                controller: nameController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Full name',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: phoneController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Phone',
-                                  border: OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.phone,
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: countryController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Default country (ISO code)',
-                                  border: OutlineInputBorder(),
-                                ),
-                                textCapitalization:
-                                    TextCapitalization.characters,
-                              ),
-                              const SizedBox(height: 16),
-                              FilledButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop(true);
-                                },
-                                child: const Text('Save'),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-
-                    if (result == true) {
-                      await _editProfileFlow(
-                        nameController.text,
-                        phoneController.text,
-                        countryController.text,
-                      );
-                    }
-                  },
+            onPressed: () => _showEditDialog(context),
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Profile header
             Row(
               children: [
-                CircleAvatar(
-                  radius: 36,
-                  child: Text(
-                    (_profile.fullName ?? widget.email ?? '?')
-                        .substring(0, 1)
-                        .toUpperCase(),
-                  ),
+                ProfileAvatar(
+                  size: 72,
+                  avatarUrl: _profile.avatarUrl,
+                  initial: (_profile.fullName ?? widget.email ?? '?')
+                      .substring(0, 1)
+                      .toUpperCase(),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -188,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _profile.fullName ?? 'Unnamed',
+                        _profile.fullName ?? 'Complete your profile',
                         style: theme.textTheme.titleLarge,
                       ),
                       const SizedBox(height: 4),
@@ -202,10 +117,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // Order history
             ListTile(
               leading: const Icon(Icons.receipt_long),
               title: const Text('Order history'),
               subtitle: const Text('View previous orders'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -215,35 +135,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               },
             ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.map),
-              title: const Text('Default country'),
-              subtitle: Text(_profile.defaultCountry ?? 'Unset'),
-              onTap: null,
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // Address management section
+            AddressManagementSection(
+              userId: _profile.userId,
+              repository: widget.dashboardRepository,
             ),
-            const Spacer(),
-            if (_saving)
-              const Center(child: CircularProgressIndicator())
-            else
-              FilledButton.tonal(
-                onPressed: () async {
-                  // Reload profile from repository and refresh parent
-                  try {
-                    final refreshed = await widget.repository
-                        .fetchOrCreateProfile(userId: _profile.userId);
-                    if (!mounted) return;
-                    setState(() => _profile = refreshed);
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // Role enrollment section
+            RoleEnrollmentSection(
+              profile: _profile,
+              roles: widget.roles,
+              onEnrollmentRequested: _handleRoleEnrollment,
+            ),
+
+            const SizedBox(height: 24),
+
+            // Reload button
+            FilledButton.tonal(
+              onPressed: () async {
+                // Reload profile from repository and refresh parent
+                try {
+                  final refreshed = await widget.repository
+                      .fetchOrCreateProfile(userId: _profile.userId);
+                  if (!mounted) return;
+                  setState(() => _profile = refreshed);
+                  if (mounted) {
                     widget.onReloadRequested();
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to reload profile: $e')),
-                    );
                   }
-                },
-                child: const Text('Reload profile'),
-              ),
+                } catch (e) {
+                  if (!mounted) return;
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to reload profile: $e')),
+                  );
+                }
+              },
+              child: const Text('Reload profile'),
+            ),
           ],
         ),
       ),

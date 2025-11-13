@@ -61,7 +61,7 @@ class _DeliveryDashboardState extends State<DeliveryDashboard> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Max concurrent jobs: ${data.staffInfo!.maxConcurrentJobs} · Available: ${data.staffInfo!.isAvailable ? 'Yes' : 'No'}',
+              'Max concurrent jobs: ${data.staffInfo!.maxConcurrentJobs} - Available: ${data.staffInfo!.isAvailable ? 'Yes' : 'No'}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -81,9 +81,17 @@ class _DeliveryDashboardState extends State<DeliveryDashboard> {
                 (shipment) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.assignment_turned_in_outlined),
-                  title: Text('Shipment ${shipment.id.substring(0, 6)}…'),
+                  title: Text('Shipment ${shipment.id.substring(0, 6)}...'),
                   subtitle: Text('Status: ${shipment.status}'),
                   trailing: Text(_timeAgo(shipment.updatedAt)),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => DeliveryJobScreen(
+                        shipmentId: shipment.id,
+                        staffId: data.staffInfo!.staffId,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             const SizedBox(height: 16),
@@ -99,11 +107,19 @@ class _DeliveryDashboardState extends State<DeliveryDashboard> {
                 (shipment) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.campaign_outlined),
-                  title: Text('Shipment ${shipment.id.substring(0, 6)}…'),
+                  title: Text('Shipment ${shipment.id.substring(0, 6)}...'),
                   subtitle: Text(
-                    'Visibility: ${shipment.visibility} · ${shipment.status}',
+                    'Visibility: ${shipment.visibility} - ${shipment.status}',
                   ),
                   trailing: Text(_timeAgo(shipment.updatedAt)),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => DeliveryJobScreen(
+                        shipmentId: shipment.id,
+                        staffId: data.staffInfo!.staffId,
+                      ),
+                    ),
+                  ),
                 ),
               ),
           ],

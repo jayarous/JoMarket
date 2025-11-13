@@ -21,28 +21,38 @@ class ShopperDashboard extends StatefulWidget {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.profile, required this.notificationCount});
+  const _HomeHeader({
+    required this.profile,
+    required this.notificationCount,
+    this.userEmail,
+  });
 
   final UserProfile profile;
   final int notificationCount;
+  final String? userEmail;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final greetingName = (profile.fullName ?? 'friend').split(' ').first;
-    final avatarLetter = greetingName.isEmpty
-        ? '👋'
-        : greetingName.substring(0, 1).toUpperCase();
+    final trimmedName = profile.fullName?.trim();
+    final fallbackSource = (trimmedName != null && trimmedName.isNotEmpty)
+        ? trimmedName
+        : (userEmail?.trim().isNotEmpty == true
+              ? userEmail!.trim()
+              : profile.userId);
+    final greetingName = (fallbackSource.isNotEmpty ? fallbackSource : 'friend')
+        .split(' ')
+        .first;
+    final avatarLetter = fallbackSource.isEmpty
+        ? '?'
+        : fallbackSource.substring(0, 1).toUpperCase();
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: theme.colorScheme.primary,
-          child: Text(
-            avatarLetter,
-            style: theme.textTheme.titleLarge?.copyWith(color: Colors.white),
-          ),
+        ProfileAvatar(
+          size: 56,
+          avatarUrl: profile.avatarUrl,
+          initial: avatarLetter,
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -279,11 +289,13 @@ class _PromoCarousel extends StatelessWidget {
     required this.banners,
     required this.controller,
     required this.activeIndex,
+    this.onCtaPressed,
   });
 
   final List<_PromoBannerData> banners;
   final PageController controller;
   final int activeIndex;
+  final void Function(_PromoBannerData data)? onCtaPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +311,13 @@ class _PromoCarousel extends StatelessWidget {
           itemCount: banners.length,
           itemBuilder: (context, index) {
             final banner = banners[index];
-            return _PromoCard(data: banner, isActive: index == activeIndex);
+            return _PromoCard(
+              data: banner,
+              isActive: index == activeIndex,
+              onCtaPressed: onCtaPressed == null
+                  ? null
+                  : () => onCtaPressed!(banner),
+            );
           },
         ),
       ),
@@ -308,10 +326,15 @@ class _PromoCarousel extends StatelessWidget {
 }
 
 class _PromoCard extends StatelessWidget {
-  const _PromoCard({required this.data, required this.isActive});
+  const _PromoCard({
+    required this.data,
+    required this.isActive,
+    this.onCtaPressed,
+  });
 
   final _PromoBannerData data;
   final bool isActive;
+  final VoidCallback? onCtaPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -342,7 +365,7 @@ class _PromoCard extends StatelessWidget {
                 SizedBox(
                   height: 28,
                   child: FilledButton(
-                    onPressed: () {},
+                    onPressed: onCtaPressed ?? () {},
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: data.colors.first,
@@ -388,12 +411,14 @@ class _TrendingDeck extends StatelessWidget {
     required this.products,
     required this.userId,
     required this.favoritesSyncToken,
+    required this.repository,
     this.onFavoriteStatusChanged,
   });
 
   final List<ProductSummary> products;
   final String userId;
   final int favoritesSyncToken;
+  final DashboardRepository repository;
   final ValueChanged<bool>? onFavoriteStatusChanged;
 
   @override
@@ -417,7 +442,8 @@ class _TrendingDeck extends StatelessWidget {
                   builder: (context) => ProductDetailScreen(
                     productId: product.id,
                     userId: userId,
-                    repository: DashboardRepository(Supabase.instance.client),
+                    repository: repository,
+                    onFavoriteStatusChanged: onFavoriteStatusChanged,
                   ),
                 ),
               );
@@ -501,12 +527,12 @@ class _TrendingDeck extends StatelessWidget {
                   Positioned(
                     top: 0,
                     right: 0,
-                  child: _FavoriteButton(
-                    productId: product.id,
-                    userId: userId,
-                    syncToken: favoritesSyncToken,
-                    onStatusChanged: onFavoriteStatusChanged,
-                  ),
+                    child: _FavoriteButton(
+                      productId: product.id,
+                      userId: userId,
+                      syncToken: favoritesSyncToken,
+                      onStatusChanged: onFavoriteStatusChanged,
+                    ),
                   ),
                 ],
               ),
@@ -524,6 +550,7 @@ class _ProductGrid extends StatelessWidget {
     required this.isCompact,
     required this.userId,
     required this.favoritesSyncToken,
+    required this.repository,
     this.onFavoriteStatusChanged,
     this.onAddToCart,
   });
@@ -532,6 +559,7 @@ class _ProductGrid extends StatelessWidget {
   final bool isCompact;
   final String userId;
   final int favoritesSyncToken;
+  final DashboardRepository repository;
   final ValueChanged<bool>? onFavoriteStatusChanged;
   final Future<void> Function(ProductSummary product)? onAddToCart;
 
@@ -575,7 +603,8 @@ class _ProductGrid extends StatelessWidget {
                   builder: (context) => ProductDetailScreen(
                     productId: product.id,
                     userId: userId,
-                    repository: DashboardRepository(Supabase.instance.client),
+                    repository: repository,
+                    onFavoriteStatusChanged: onFavoriteStatusChanged,
                   ),
                 ),
               );
@@ -948,18 +977,22 @@ class _BottomNavBar extends StatelessWidget {
 
 class _PromoBannerData {
   const _PromoBannerData({
+    required this.id,
     required this.title,
     required this.subtitle,
     required this.cta,
     required this.colors,
     required this.icon,
+    this.action,
   });
 
+  final String id;
   final String title;
   final String subtitle;
   final String cta;
   final List<Color> colors;
   final IconData icon;
+  final String? action;
 }
 
 class _NavItem {
@@ -977,21 +1010,21 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   bool _isSearchFocused = false;
   int _activePromoIndex = 0;
   Timer? _promoTimer;
+  int _latestPromoCount = _defaultPromoBanners.length;
   bool _showCartReminder = true;
   int _activeFilterIndex = 0;
   int _activeNavIndex = 0;
   String _searchQuery = '';
-  int _cartItemCount = 0;
-  int _favoritesCount = 0;
+  // Use ValueNotifier so counts can update independently without rebuilding
+  // the whole dashboard FutureBuilder.
+  final ValueNotifier<int> _cartItemCount = ValueNotifier<int>(0);
+  final ValueNotifier<int> _favoritesCount = ValueNotifier<int>(0);
   int _favoritesStatusVersion = 0;
+  Timer? _searchDebounce;
 
-  static const List<String> _filters = [
-    'All',
-    'Fashion',
-    'Tech',
-    'Home',
-    'Beauty',
-  ];
+  // Filters are loaded from the server (categories) at runtime. The UI will
+  // construct a local filter list from the categories returned by
+  // `loadShopperData` (see build()).
 
   static const List<_NavItem> _navItems = [
     _NavItem(icon: Icons.home_filled, label: 'Home'),
@@ -1001,8 +1034,9 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _NavItem(icon: Icons.person_rounded, label: 'Profile'),
   ];
 
-  static const List<_PromoBannerData> _promoBanners = [
+  static const List<_PromoBannerData> _defaultPromoBanners = [
     _PromoBannerData(
+      id: 'flash',
       title: 'Weekend Flash',
       subtitle: '30% off daily essentials',
       cta: 'Shop now',
@@ -1010,6 +1044,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       icon: Icons.bolt_rounded,
     ),
     _PromoBannerData(
+      id: 'tech',
       title: 'Tech Upgrade',
       subtitle: 'Save on smart devices',
       cta: 'View deals',
@@ -1017,6 +1052,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       icon: Icons.devices_other_rounded,
     ),
     _PromoBannerData(
+      id: 'arrivals',
       title: 'New Arrivals',
       subtitle: 'Fresh fits for fall',
       cta: 'Discover',
@@ -1044,14 +1080,14 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       );
       if (mounted) {
         setState(() {
-          _cartItemCount = cart.itemCount;
+          _cartItemCount.value = cart.itemCount;
         });
       }
     } catch (e) {
       // Silently fail - cart count is not critical
       if (mounted) {
         setState(() {
-          _cartItemCount = 0;
+          _cartItemCount.value = 0;
         });
       }
     }
@@ -1064,14 +1100,14 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       );
       if (mounted) {
         setState(() {
-          _favoritesCount = favorites.length;
+          _favoritesCount.value = favorites.length;
         });
       }
     } catch (e) {
       // Silently fail - favorites count is not critical
       if (mounted) {
         setState(() {
-          _favoritesCount = 0;
+          _favoritesCount.value = 0;
         });
       }
     }
@@ -1081,20 +1117,24 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     if (!mounted) return;
     setState(() {
       if (isFavorite) {
-        _favoritesCount += 1;
-      } else if (_favoritesCount > 0) {
-        _favoritesCount -= 1;
+        _favoritesCount.value += 1;
+      } else if (_favoritesCount.value > 0) {
+        _favoritesCount.value -= 1;
       }
     });
+  }
+
+  void _handleDetailFavoriteChanged(bool isFavorite) {
+    _handleFavoriteStatusChanged(isFavorite);
+    _favoritesStatusVersion += 1;
+    _loadFavoritesCount();
   }
 
   Future<void> _handleAddToCart(ProductSummary product) async {
     if (product.priceCents == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Price unavailable for ${product.name}'),
-        ),
+        SnackBar(content: Text('Price unavailable for ${product.name}')),
       );
       return;
     }
@@ -1130,10 +1170,10 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                       ),
                     )
                     .then((_) {
-                  if (mounted) {
-                    _loadCartCount();
-                  }
-                });
+                      if (mounted) {
+                        _loadCartCount();
+                      }
+                    });
               },
             ),
           ),
@@ -1161,6 +1201,9 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _searchController
       ..removeListener(_handleSearchTextChanged)
       ..dispose();
+    _searchDebounce?.cancel();
+    _cartItemCount.dispose();
+    _favoritesCount.dispose();
     super.dispose();
   }
 
@@ -1171,7 +1214,11 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   void _handleSearchTextChanged() {
     final nextQuery = _searchController.text;
     if (nextQuery == _searchQuery) return;
-    setState(() => _searchQuery = nextQuery);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = nextQuery);
+    });
   }
 
   void _handleSearchSubmitted(String value) {
@@ -1200,10 +1247,10 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
 
   void _startPromoAutoScroll() {
     _promoTimer?.cancel();
-    if (_promoBanners.length <= 1) return;
     _promoTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!_promoController.hasClients) return;
-      final nextPage = (_activePromoIndex + 1) % _promoBanners.length;
+      if (_latestPromoCount <= 1) return;
+      final nextPage = (_activePromoIndex + 1) % _latestPromoCount;
       _promoController.animateToPage(
         nextPage,
         duration: const Duration(milliseconds: 450),
@@ -1212,11 +1259,16 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     });
   }
 
-  List<ProductSummary> _filteredProducts(List<ProductSummary> products) {
+  List<ProductSummary> _filteredProducts(
+    List<ProductSummary> products,
+    List<CategorySummary> categories,
+  ) {
     var filtered = products;
 
-    // Apply category filter
-    final filterName = _filters[_activeFilterIndex];
+    // Build filter names from categories (All + category names)
+    final filterNames = ['All', ...categories.map((c) => c.name)];
+    final filterName =
+        filterNames[_activeFilterIndex.clamp(0, filterNames.length - 1)];
     if (filterName != 'All') {
       filtered = filtered.where((product) {
         // Match filter name with category name (case-insensitive)
@@ -1243,6 +1295,75 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     return filtered;
   }
 
+  int _indexForCategory(String? categoryId, List<CategorySummary> categories) {
+    if (categoryId == null) return 0;
+    final idx = categories.indexWhere((cat) => cat.id == categoryId);
+    if (idx == -1) return 0;
+    return idx + 1;
+  }
+
+  List<_PromoBannerData> _promoBannersFrom(List<HomePromo> promos) {
+    if (promos.isEmpty) {
+      return _defaultPromoBanners;
+    }
+    final fallback = _defaultPromoBanners.first.colors;
+    return promos
+        .map(
+          (promo) => _PromoBannerData(
+            id: promo.id,
+            title: promo.title,
+            subtitle: promo.subtitle,
+            cta: promo.ctaLabel,
+            colors: [
+              _promoColorFromHex(promo.primaryColorHex, fallback.first),
+              _promoColorFromHex(
+                promo.secondaryColorHex,
+                fallback.length > 1 ? fallback[1] : fallback.first,
+              ),
+            ],
+            icon: _promoIconFromName(promo.iconName),
+            action: promo.ctaAction,
+          ),
+        )
+        .toList();
+  }
+
+  Color _promoColorFromHex(String? value, Color fallback) {
+    if (value == null) return fallback;
+    var raw = value.trim();
+    if (raw.isEmpty) return fallback;
+    if (raw.startsWith('#')) raw = raw.substring(1);
+    if (raw.startsWith('0x')) raw = raw.substring(2);
+    int? colorInt = int.tryParse(raw);
+    colorInt ??= int.tryParse(raw, radix: 16);
+    if (colorInt == null) return fallback;
+    if (raw.length <= 6) {
+      colorInt |= 0xFF000000;
+    }
+    return Color(colorInt);
+  }
+
+  IconData _promoIconFromName(String? name) {
+    switch (name?.toLowerCase()) {
+      case 'flash':
+      case 'bolt':
+        return Icons.bolt_rounded;
+      case 'tech':
+      case 'device':
+        return Icons.devices_other_rounded;
+      case 'grocery':
+      case 'basket':
+        return Icons.shopping_basket_rounded;
+      case 'delivery':
+        return Icons.local_shipping;
+      case 'eco':
+      case 'leaf':
+        return Icons.eco_rounded;
+      default:
+        return Icons.local_offer_rounded;
+    }
+  }
+
   void _reload() {
     setState(() {
       _future = widget.repository.loadShopperData();
@@ -1255,6 +1376,34 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       _future = future;
     });
     return future;
+  }
+
+  Future<void> _openFavorites() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => FavoritesScreen(userId: widget.profile.userId),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _activeNavIndex = 0;
+      _favoritesStatusVersion += 1;
+    });
+    _loadFavoritesCount();
+  }
+
+  Future<void> _openCart() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ShoppingCartScreen(
+          userId: widget.profile.userId,
+          repository: widget.repository,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _activeNavIndex = 0);
+    _loadCartCount();
   }
 
   Future<void> _openProfileFromNav() async {
@@ -1272,6 +1421,34 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
 
     if (!mounted) return;
     setState(() => _activeNavIndex = 0);
+  }
+
+  void _handlePromoCta(_PromoBannerData data) {
+    final action = data.action?.toLowerCase().trim();
+    if (action == null || action.isEmpty) {
+      _showPromoSnack('${data.title} is coming soon.');
+      return;
+    }
+    if (action.contains('favorite')) {
+      _openFavorites();
+      return;
+    }
+    if (action.contains('cart')) {
+      _openCart();
+      return;
+    }
+    if (action.contains('profile')) {
+      _openProfileFromNav();
+      return;
+    }
+    _showPromoSnack('Promo action "$action" not wired yet.');
+  }
+
+  void _showPromoSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -1298,8 +1475,13 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
             );
           }
           final data = snapshot.data!;
+          final promoBanners = _promoBannersFrom(data.promos);
+          _latestPromoCount = promoBanners.length;
           final trendingProducts = data.featuredProducts.take(5).toList();
-          final filteredProducts = _filteredProducts(data.featuredProducts);
+          final filteredProducts = _filteredProducts(
+            data.featuredProducts,
+            data.categories,
+          );
           final hasSearchQuery = _searchQuery.trim().isNotEmpty;
           final activeQueryLabel = _searchController.text.trim();
           final theme = Theme.of(context);
@@ -1325,6 +1507,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                         _HomeHeader(
                           profile: widget.profile,
                           notificationCount: trendingProducts.isEmpty ? 0 : 3,
+                          userEmail: widget.userEmail,
                         ),
                         const SizedBox(height: 16),
                         AnimatedSwitcher(
@@ -1340,9 +1523,10 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                         ),
                         const SizedBox(height: 20),
                         _PromoCarousel(
-                          banners: _promoBanners,
+                          banners: promoBanners,
                           controller: _promoController,
                           activeIndex: _activePromoIndex,
+                          onCtaPressed: _handlePromoCta,
                         ),
                         const SizedBox(height: 20),
                         _SectionHeader(
@@ -1359,13 +1543,14 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                             message: 'No published products yet.',
                           )
                         else
-                      _TrendingDeck(
-                        products: trendingProducts,
-                        userId: widget.profile.userId,
-                        favoritesSyncToken: _favoritesStatusVersion,
-                        onFavoriteStatusChanged:
-                            _handleFavoriteStatusChanged,
-                      ),
+                          _TrendingDeck(
+                            products: trendingProducts,
+                            userId: widget.profile.userId,
+                            favoritesSyncToken: _favoritesStatusVersion,
+                            repository: widget.repository,
+                            onFavoriteStatusChanged:
+                                _handleDetailFavoriteChanged,
+                          ),
                         const SizedBox(height: 24),
                         _CategoryFilter(
                           categories: data.categories,
@@ -1382,15 +1567,43 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           controller: _searchController,
                           onClear: _clearSearch,
                           onSubmitted: _handleSearchSubmitted,
-                          onAdvancedSearch: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (context) => ProductSearchScreen(
-                                  userId: widget.profile.userId,
-                                  categories: data.categories,
-                                ),
-                              ),
-                            );
+                          onAdvancedSearch: () async {
+                            final selectedCategoryId =
+                                _activeFilterIndex == 0 ||
+                                    _activeFilterIndex - 1 >=
+                                        data.categories.length
+                                ? null
+                                : data.categories[_activeFilterIndex - 1].id;
+                            final result = await Navigator.of(context)
+                                .push<SearchResult?>(
+                                  MaterialPageRoute<SearchResult?>(
+                                    builder: (context) => ProductSearchScreen(
+                                      userId: widget.profile.userId,
+                                      categories: data.categories,
+                                      initialQuery: _searchController.text,
+                                      initialCategoryId: selectedCategoryId,
+                                    ),
+                                  ),
+                                );
+
+                            if (!mounted) return;
+                            if (result == null) {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                                _activeFilterIndex = 0;
+                              });
+                              return;
+                            }
+
+                            setState(() {
+                              _searchController.text = result.query;
+                              _searchQuery = result.query;
+                              _activeFilterIndex = _indexForCategory(
+                                result.categoryId,
+                                data.categories,
+                              );
+                            });
                           },
                         ),
                         const SizedBox(height: 12),
@@ -1398,21 +1611,31 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
-                            children: List.generate(_filters.length, (index) {
-                              final isSelected = index == _activeFilterIndex;
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  right: index == _filters.length - 1 ? 0 : 8,
-                                ),
-                                child: ChoiceChip(
-                                  label: Text(_filters[index]),
-                                  selected: isSelected,
-                                  onSelected: (_) {
-                                    setState(() => _activeFilterIndex = index);
-                                  },
-                                ),
-                              );
-                            }),
+                            children: List.generate(
+                              data.categories.length + 1,
+                              (index) {
+                                final isSelected = index == _activeFilterIndex;
+                                final label = index == 0
+                                    ? 'All'
+                                    : data.categories[index - 1].name;
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    right: index == data.categories.length
+                                        ? 0
+                                        : 8,
+                                  ),
+                                  child: ChoiceChip(
+                                    label: Text(label),
+                                    selected: isSelected,
+                                    onSelected: (_) {
+                                      setState(
+                                        () => _activeFilterIndex = index,
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -1427,14 +1650,15 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                                 'No products found for "$activeQueryLabel". Try a different keyword or clear the search.',
                           )
                         else
-                      _ProductGrid(
-                        products: filteredProducts,
-                        isCompact: isCompact,
-                        userId: widget.profile.userId,
-                        favoritesSyncToken: _favoritesStatusVersion,
-                        onFavoriteStatusChanged:
-                            _handleFavoriteStatusChanged,
-                        onAddToCart: _handleAddToCart,
+                          _ProductGrid(
+                            products: filteredProducts,
+                            isCompact: isCompact,
+                            userId: widget.profile.userId,
+                            favoritesSyncToken: _favoritesStatusVersion,
+                            repository: widget.repository,
+                            onFavoriteStatusChanged:
+                                _handleDetailFavoriteChanged,
+                            onAddToCart: _handleAddToCart,
                           ),
                         const SizedBox(height: 24),
                         Text(
@@ -1494,56 +1718,35 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       // the previously visible gap beneath the buttons.
       bottomNavigationBar: SafeArea(
         top: false,
-        child: _BottomNavBar(
-          items: _navItems,
-          activeIndex: _activeNavIndex,
-          cartItemCount: _cartItemCount,
-          favoritesCount: _favoritesCount,
-          onChanged: (index) {
-            setState(() => _activeNavIndex = index);
+        child: ValueListenableBuilder<int>(
+          valueListenable: _cartItemCount,
+          builder: (context, cartCount, _) {
+            return ValueListenableBuilder<int>(
+              valueListenable: _favoritesCount,
+              builder: (context, favCount, _) {
+                return _BottomNavBar(
+                  items: _navItems,
+                  activeIndex: _activeNavIndex,
+                  cartItemCount: cartCount,
+                  favoritesCount: favCount,
+                  onChanged: (index) {
+                    setState(() => _activeNavIndex = index);
 
-            // Handle Favorites navigation (index 1)
-            if (index == 1) {
-              Navigator.of(context)
-                  .push(
-                    MaterialPageRoute<void>(
-                      builder: (context) =>
-                          FavoritesScreen(userId: widget.profile.userId),
-                    ),
-                  )
-                  .then((_) {
-                    if (!mounted) return;
-                    // Reset to home when returning, bump sync token, and reload favorites count
-                    setState(() {
-                      _activeNavIndex = 0;
-                      _favoritesStatusVersion += 1;
-                    });
-                    _loadFavoritesCount();
-                  });
-            }
-
-            // Handle cart navigation (index 3)
-            if (index == 3) {
-              Navigator.of(context)
-                  .push(
-                    MaterialPageRoute<void>(
-                      builder: (context) => ShoppingCartScreen(
-                        userId: widget.profile.userId,
-                        repository: widget.repository,
-                      ),
-                    ),
-                  )
-                  .then((_) {
-                    // Reset to home when returning and reload cart count
-                    setState(() => _activeNavIndex = 0);
-                    _loadCartCount();
-                  });
-            }
-
-            // Handle profile navigation (index 4)
-            if (index == 4) {
-              _openProfileFromNav();
-            }
+                    if (index == 1) {
+                      _openFavorites();
+                      return;
+                    }
+                    if (index == 3) {
+                      _openCart();
+                      return;
+                    }
+                    if (index == 4) {
+                      _openProfileFromNav();
+                    }
+                  },
+                );
+              },
+            );
           },
         ),
       ),

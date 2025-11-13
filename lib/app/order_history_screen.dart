@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
+import 'offline_cache_service.dart';
+import 'order_detail_screen.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({required this.userId, super.key});
@@ -14,7 +16,10 @@ class OrderHistoryScreen extends StatefulWidget {
 }
 
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
-  final _repository = DashboardRepository(Supabase.instance.client);
+  final _repository = DashboardRepository(
+    Supabase.instance.client,
+    cacheService: OfflineCacheService(),
+  );
   List<OrderSummary> _orders = [];
   bool _isLoading = true;
   String? _error;
@@ -53,6 +58,25 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final m = d.month.toString().padLeft(2, '0');
     final day = d.day.toString().padLeft(2, '0');
     return '$y-$m-$day';
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+      case 'completed':
+      case 'delivered':
+        return Colors.green;
+      case 'pending':
+        return Colors.orange;
+      case 'processing':
+      case 'shipped':
+        return Colors.blue;
+      case 'cancelled':
+      case 'failed':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
@@ -134,42 +158,88 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadOrders,
-      child: ListView.separated(
+      child: ListView.builder(
         padding: const EdgeInsets.all(8),
         itemCount: _orders.length,
-        separatorBuilder: (context, index) => const Divider(height: 8),
         itemBuilder: (context, index) {
           final order = _orders[index];
-          return ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
-            leading: CircleAvatar(
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: const Icon(Icons.receipt_long, size: 18),
-            ),
-            title: Text('Order ${order.orderNumber}'),
-            subtitle: Text('${order.status} • ${_formatDate(order.updatedAt)}'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              // For now show a simple dialog with basic info. A detailed order screen can be added later.
-              showDialog<void>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text('Order ${order.orderNumber}'),
-                  content: Text(
-                    'Status: ${order.status}\nUpdated: ${_formatDate(order.updatedAt)}',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.receipt_long,
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              title: Text(
+                'Order #${order.orderNumber}',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(
+                          order.status,
+                        ).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _getStatusColor(order.status),
+                        ),
+                      ),
+                      child: Text(
+                        order.status.toUpperCase(),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: _getStatusColor(order.status),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDate(order.updatedAt),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+              trailing: Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => OrderDetailScreen(
+                      orderId: order.orderId,
+                      repository: _repository,
+                    ),
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

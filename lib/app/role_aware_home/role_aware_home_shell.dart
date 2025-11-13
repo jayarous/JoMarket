@@ -20,7 +20,11 @@ class _RoleAwareHomeState extends State<RoleAwareHome> {
     super.initState();
     final client = Supabase.instance.client;
     _profileRepository = ProfileRepository(client);
-    _dashboardRepository = DashboardRepository(client);
+    // Initialize DashboardRepository with cache service for offline resilience
+    _dashboardRepository = DashboardRepository(
+      client,
+      cacheService: OfflineCacheService(),
+    );
     _bootstrapFuture = _bootstrap();
   }
 

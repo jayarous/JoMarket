@@ -11,12 +11,14 @@ class ProductDetailScreen extends StatefulWidget {
     required this.productId,
     required this.userId,
     required this.repository,
+    this.onFavoriteStatusChanged,
     super.key,
   });
 
   final String productId;
   final String userId;
   final DashboardRepository repository;
+  final ValueChanged<bool>? onFavoriteStatusChanged;
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -31,6 +33,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   int _quantity = 1;
   late AnimationController _fabAnimationController;
   late Animation<double> _fabScaleAnimation;
+  List<ProductSummary> _relatedProducts = [];
+  List<ProductReview> _reviews = [];
+  bool _loadingRelated = false;
+  bool _loadingReviews = false;
 
   @override
   void initState() {
@@ -44,6 +50,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     _fabScaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
       CurvedAnimation(parent: _fabAnimationController, curve: Curves.easeInOut),
     );
+    _loadFavoriteStatus();
+    _loadAdditionalData();
+  }
+
+  Future<void> _loadFavoriteStatus() async {
+    try {
+      final isFavorite = await widget.repository.isFavorite(
+        userId: widget.userId,
+        productId: widget.productId,
+      );
+      if (mounted) {
+        setState(() => _isFavorite = isFavorite);
+      }
+    } catch (e) {
+      // Silently fail, default to false
+    }
+  }
+
+  Future<void> _loadAdditionalData() async {
+    // Load product detail first to get category
+    final productDetail = await _future;
+
+    // Load related products and reviews in parallel
+    setState(() {
+      _loadingRelated = true;
+      _loadingReviews = true;
+    });
+
+    try {
+      final results = await Future.wait([
+        widget.repository.getRelatedProducts(
+          productId: widget.productId,
+          categoryId: productDetail.categoryId,
+          limit: 5,
+        ),
+        widget.repository.getProductReviews(
+          productId: widget.productId,
+          limit: 10,
+        ),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _relatedProducts = results[0] as List<ProductSummary>;
+          _reviews = results[1] as List<ProductReview>;
+          _loadingRelated = false;
+          _loadingReviews = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingRelated = false;
+          _loadingReviews = false;
+        });
+      }
+    }
   }
 
   @override
@@ -62,17 +125,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     }
   }
 
-  void _toggleFavorite() {
+  Future<void> _toggleFavorite() async {
+    final wasFavorite = _isFavorite;
+
+    // Optimistically update UI
     setState(() => _isFavorite = !_isFavorite);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isFavorite ? 'Added to favorites' : 'Removed from favorites',
-        ),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+
+    try {
+      if (wasFavorite) {
+        await widget.repository.removeFavorite(
+          userId: widget.userId,
+          productId: widget.productId,
+        );
+      } else {
+        await widget.repository.addFavorite(
+          userId: widget.userId,
+          productId: widget.productId,
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isFavorite ? 'Added to favorites' : 'Removed from favorites',
+            ),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        widget.onFavoriteStatusChanged?.call(_isFavorite);
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() => _isFavorite = wasFavorite);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update favorite: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _addToCart() async {
@@ -722,7 +818,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   Widget _buildReviews(BuildContext context, ProductDetail product) {
     final theme = Theme.of(context);
-    final hash = product.id.hashCode;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -738,84 +833,195 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              TextButton(onPressed: () {}, child: const Text('See all')),
+              if (_reviews.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All reviews view coming soon'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: const Text('See all'),
+                ),
             ],
           ),
           const SizedBox(height: 12),
-          ...List.generate(2, (index) {
-            final rating = 4 + (hash + index) % 2;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
+          if (_loadingReviews)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_reviews.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: theme.colorScheme.primaryContainer,
-                        child: Text(
-                          'U${index + 1}',
-                          style: TextStyle(
-                            color: theme.colorScheme.onPrimaryContainer,
-                            fontWeight: FontWeight.bold,
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.rate_review_outlined,
+                      size: 48,
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No reviews yet',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Be the first to review this product',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...(_reviews.take(2).map((review) {
+              final userName = review.userName ?? 'Anonymous';
+              final initial = userName.substring(0, 1).toUpperCase();
+              final timeAgo = _formatTimeAgo(review.createdAt);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          child: Text(
+                            initial,
+                            style: TextStyle(
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'User ${index + 1}',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                userName,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            Row(
-                              children: List.generate(5, (starIndex) {
-                                return Icon(
-                                  starIndex < rating
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  size: 14,
-                                  color: Colors.amber.shade700,
-                                );
-                              }),
-                            ),
-                          ],
+                              Row(
+                                children: List.generate(5, (starIndex) {
+                                  return Icon(
+                                    starIndex < review.rating
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    size: 14,
+                                    color: Colors.amber.shade700,
+                                  );
+                                }),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                        Text(
+                          timeAgo,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (review.comment != null) ...[
+                      const SizedBox(height: 12),
                       Text(
-                        '2 days ago',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        review.comment!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.5,
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Great product! Highly recommend it. The quality is excellent and delivery was fast.',
-                    style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-                  ),
-                ],
-              ),
-            );
-          }),
+                  ],
+                ),
+              );
+            })),
         ],
       ),
     );
   }
 
+  String _formatTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 365) {
+      final years = (difference.inDays / 365).floor();
+      return '$years ${years == 1 ? 'year' : 'years'} ago';
+    } else if (difference.inDays > 30) {
+      final months = (difference.inDays / 30).floor();
+      return '$months ${months == 1 ? 'month' : 'months'} ago';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'} ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
   Widget _buildRelatedProducts(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (_loadingRelated) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You may also like',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_relatedProducts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -832,65 +1038,95 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             height: 200,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: 5,
+              itemCount: _relatedProducts.length,
               itemBuilder: (context, index) {
-                return Container(
-                  width: 150,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(12),
-                            ),
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors
-                                    .primaries[index % Colors.primaries.length]
-                                    .shade300,
-                                Colors
-                                    .primaries[(index + 2) %
-                                        Colors.primaries.length]
-                                    .shade100,
-                              ],
+                final product = _relatedProducts[index];
+                final price = product.priceCents == null
+                    ? null
+                    : product.priceCents! / 100;
+
+                return InkWell(
+                  onTap: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (context) => ProductDetailScreen(
+                          productId: product.id,
+                          userId: widget.userId,
+                          repository: widget.repository,
+                        ),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 150,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 1,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(12),
+                              ),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors
+                                      .primaries[index %
+                                          Colors.primaries.length]
+                                      .shade300,
+                                  Colors
+                                      .primaries[(index + 2) %
+                                          Colors.primaries.length]
+                                      .shade100,
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Related Product ${index + 1}',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w600,
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                product.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'JOD ${(20 + index * 5).toStringAsFixed(2)}',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              if (price != null)
+                                Text(
+                                  '${product.currency} ${price.toStringAsFixed(2)}',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Price unavailable',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },

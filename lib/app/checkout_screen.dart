@@ -23,36 +23,50 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _notesController = TextEditingController();
-  final _shippingOptions = const [
-    _ShippingOption(
-      id: 'standard',
-      label: 'Standard Delivery',
-      description: '2-3 business days - economy shipping',
-      feeCents: 250,
-    ),
-    _ShippingOption(
-      id: 'express',
-      label: 'Express Delivery',
-      description: 'Next-day delivery - priority handling',
-      feeCents: 500,
-    ),
-  ];
-
+  
+  List<ShippingOption> _shippingOptions = [];
   List<Address> _addresses = [];
   Address? _selectedAddress;
-  _ShippingOption? _selectedShipping;
+  ShippingOption? _selectedShipping;
   CheckoutPaymentMethod _paymentMethod = CheckoutPaymentMethod.card;
   CheckoutOrderReceipt? _receipt;
+  // ignore: unused_field
+  PaymentIntent? _paymentIntent; // Stored for future payment processing integration
   bool _isLoadingAddresses = true;
+  bool _isLoadingShipping = true;
   bool _isPlacingOrder = false;
   String? _addressError;
+  String? _shippingError;
   String? _submitError;
 
   @override
   void initState() {
     super.initState();
-    _selectedShipping = _shippingOptions.first;
     _loadAddresses();
+    _loadShippingOptions();
+  }
+
+  Future<void> _loadShippingOptions() async {
+    setState(() {
+      _isLoadingShipping = true;
+      _shippingError = null;
+    });
+
+    try {
+      final options = await widget.repository.getShippingOptions();
+      if (!mounted) return;
+      setState(() {
+        _shippingOptions = options;
+        _selectedShipping = options.isNotEmpty ? options.first : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _shippingError = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingShipping = false);
+      }
+    }
   }
 
   @override
@@ -164,7 +178,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _placeOrder() async {
     if (_selectedAddress == null || _selectedShipping == null) {
       setState(() {
-        _submitError = 'Please select a shipping address.';
+        _submitError = 'Please select a shipping address and delivery method.';
       });
       return;
     }
@@ -175,6 +189,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
+      // Create payment intent first
+      final paymentIntent = await widget.repository.createPaymentIntent(
+        amountCents: _charges.totalCents,
+        currency: widget.cart.currency,
+        paymentMethod: _paymentMethod,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _paymentIntent = paymentIntent;
+      });
+
+      // For card payments, in a real app you would handle the payment here
+      // For now, we'll proceed directly to order placement
+      
       final receipt = await widget.repository.placeOrder(
         userId: widget.userId,
         cart: widget.cart,
@@ -236,26 +265,65 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._shippingOptions.map(
-          (option) => Card(
-            child: RadioListTile<_ShippingOption>(
-              value: option,
-              groupValue: _selectedShipping,
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _selectedShipping = value);
-                }
-              },
-              title: Text(option.label),
-              subtitle: Text(option.description),
-              secondary: Text(
-                _formatMoney(option.feeCents),
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+        if (_isLoadingShipping)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (_shippingError != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Failed to load shipping options',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(color: theme.colorScheme.error),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(_shippingError!),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _loadShippingOptions,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (_shippingOptions.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('No shipping options available'),
+            ),
+          )
+        else
+          ..._shippingOptions.map(
+            (option) => Card(
+              child: RadioListTile<ShippingOption>(
+                value: option,
+                groupValue: _selectedShipping,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedShipping = value);
+                  }
+                },
+                title: Text(option.label),
+                subtitle: Text('${option.description} (${option.estimatedDays} days)'),
+                secondary: Text(
+                  _formatMoney(option.feeCents),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ),
-        ),
         const SizedBox(height: 24),
         Text(
           'Payment Method',
@@ -648,19 +716,7 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-class _ShippingOption {
-  const _ShippingOption({
-    required this.id,
-    required this.label,
-    required this.description,
-    required this.feeCents,
-  });
 
-  final String id;
-  final String label;
-  final String description;
-  final int feeCents;
-}
 
 class _AddressFormSheet extends StatefulWidget {
   const _AddressFormSheet({

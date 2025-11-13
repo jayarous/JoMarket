@@ -89,10 +89,20 @@ class _VendorDashboardState extends State<VendorDashboard> {
             const SizedBox(height: 16),
             _SectionHeader(
               title: 'Recent products',
-              action: IconButton(
-                tooltip: 'Reload',
-                icon: const Icon(Icons.refresh),
-                onPressed: _reload,
+              action: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Add Product',
+                    icon: const Icon(Icons.add),
+                    onPressed: () => _navigateToProductEdit(context, null),
+                  ),
+                  IconButton(
+                    tooltip: 'Reload',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _reload,
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 8),
@@ -106,6 +116,17 @@ class _VendorDashboardState extends State<VendorDashboard> {
                   title: Text(product.name),
                   subtitle: Text('Status: ${product.status}'),
                   trailing: Text(_formatPrice(product)),
+                  onTap: () async {
+                    final repository = DashboardRepository(
+                      Supabase.instance.client,
+                    );
+                    final detail = await repository.loadProductDetail(
+                      product.id,
+                    );
+                    if (context.mounted) {
+                      _navigateToProductEdit(context, detail);
+                    }
+                  },
                 ),
               ),
             const SizedBox(height: 16),
@@ -118,16 +139,17 @@ class _VendorDashboardState extends State<VendorDashboard> {
                 (shipment) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.local_shipping_outlined),
-                  title: Text('Shipment ${shipment.id.substring(0, 6)}…'),
+                  title: Text('Shipment ${shipment.id.substring(0, 6)}...'),
                   subtitle: Text(
                     shipment.orderId != null
-                        ? 'Order ${shipment.orderId!.substring(0, 6)}… · ${shipment.status}'
+                        ? 'Order ${shipment.orderId!.substring(0, 6)}... - ${shipment.status}'
                         : 'Status: ${shipment.status}',
                   ),
                   trailing: Text(
                     'Updated ${_timeAgo(shipment.updatedAt)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  onTap: () => _navigateToShipmentEdit(context, shipment.id),
                 ),
               ),
           ],
@@ -157,4 +179,41 @@ class _VendorIntro extends StatelessWidget {
       ],
     );
   }
+}
+
+void _navigateToProductEdit(BuildContext context, ProductDetail? product) {
+  final vendorId =
+      (ModalRoute.of(context)!.settings.arguments as Map?)?['vendorId']
+          as String?;
+  if (vendorId == null) return;
+
+  Navigator.of(context)
+      .push(
+        MaterialPageRoute<bool>(
+          builder: (context) =>
+              ProductEditScreen(vendorId: vendorId, product: product),
+        ),
+      )
+      .then((changed) {
+        if (changed == true && context.mounted) {
+          // Trigger reload in parent
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Product updated')));
+        }
+      });
+}
+
+void _navigateToShipmentEdit(BuildContext context, String shipmentId) {
+  final vendorId =
+      (ModalRoute.of(context)!.settings.arguments as Map?)?['vendorId']
+          as String?;
+  if (vendorId == null) return;
+
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) =>
+          ShipmentEditScreen(vendorId: vendorId, shipmentId: shipmentId),
+    ),
+  );
 }

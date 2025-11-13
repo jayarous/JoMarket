@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
+import 'offline_cache_service.dart';
 import 'product_detail_screen.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -15,7 +16,10 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  final _repository = DashboardRepository(Supabase.instance.client);
+  final _repository = DashboardRepository(
+    Supabase.instance.client,
+    cacheService: OfflineCacheService(),
+  );
   List<FavoriteProduct> _favorites = [];
   bool _isLoading = true;
   String? _error;
@@ -227,6 +231,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         productId: favorite.productId,
                         userId: widget.userId,
                         repository: _repository,
+                        onFavoriteStatusChanged: (isFavorite) {
+                          if (!isFavorite && mounted) {
+                            setState(() {
+                              _favorites.removeWhere(
+                                (fav) => fav.productId == favorite.productId,
+                              );
+                            });
+                          }
+                        },
                       ),
                     ),
                   )

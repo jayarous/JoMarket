@@ -169,12 +169,6 @@ class _RoleDashboardState extends State<RoleDashboard> {
               tooltip: 'Profile',
               icon: const Icon(Icons.account_circle),
               onPressed: () {
-                // Show quick feedback so it's obvious the button was tapped,
-                // then navigate to the Profile screen.
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Opening profile...')),
-                );
-
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (context) => ProfileScreen(
@@ -182,6 +176,7 @@ class _RoleDashboardState extends State<RoleDashboard> {
                       repository: widget.profileRepository,
                       dashboardRepository: widget.dashboardRepository,
                       email: widget.session?.user.email,
+                      roles: widget.roles,
                       onReloadRequested: widget.onReloadRequested,
                     ),
                   ),
