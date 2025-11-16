@@ -518,8 +518,6 @@ class SellerRepository {
           escalated,
           escalation_reason,
           escalated_at,
-          moderation_resolution,
-          resolved_by_admin,
           orders(order_number)
         ''')
         .eq('vendor_id', vendorId);

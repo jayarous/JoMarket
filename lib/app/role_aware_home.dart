@@ -3,7 +3,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:logging/logging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -23,7 +22,6 @@ import 'vendor/product_edit_screen.dart';
 import 'vendor/shipment_edit_screen.dart';
 import 'package:jo_market/app/widgets/profile_avatar.dart';
 import 'package:jo_market/app/widgets/profile_widgets.dart';
-import 'package:jo_market/app/shared/services/push_notification_service.dart';
 
 part 'role_aware_home/role_aware_home_shell.dart';
 part 'role_aware_home/role_dashboard.dart';

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../app/shared/services/push_notification_service.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
@@ -14,6 +16,8 @@ class ProfileScreen extends StatefulWidget {
     required this.dashboardRepository,
     this.email,
     this.roles = const [],
+    this.activeRole,
+    this.onRoleChanged,
     required this.onReloadRequested,
     super.key,
   });
@@ -23,6 +27,8 @@ class ProfileScreen extends StatefulWidget {
   final DashboardRepository dashboardRepository;
   final String? email;
   final List<RoleAssignment> roles;
+  final RoleAssignment? activeRole;
+  final ValueChanged<RoleAssignment>? onRoleChanged;
   final VoidCallback onReloadRequested;
 
   @override
@@ -31,11 +37,26 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
+  String? _selectedRoleId;
+  bool _signingOut = false;
 
   @override
   void initState() {
     super.initState();
     _profile = widget.profile;
+    _selectedRoleId =
+        widget.activeRole?.id ??
+        (widget.roles.isNotEmpty ? widget.roles.first.id : null);
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeRole?.id != widget.activeRole?.id) {
+      _selectedRoleId =
+          widget.activeRole?.id ??
+          (widget.roles.isNotEmpty ? widget.roles.first.id : null);
+    }
   }
 
   Future<void> _showEditDialog(BuildContext context) async {
@@ -68,9 +89,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _selectRole(RoleAssignment role) {
+    if (_selectedRoleId == role.id) return;
+    setState(() {
+      _selectedRoleId = role.id;
+    });
+    widget.onRoleChanged?.call(role);
+  }
+
+  IconData _roleIcon(AppUserRole role) {
+    switch (role) {
+      case AppUserRole.shopper:
+        return Icons.shopping_bag;
+      case AppUserRole.vendorOwner:
+      case AppUserRole.vendorStaff:
+        return Icons.store;
+      case AppUserRole.delivery:
+        return Icons.local_shipping;
+      case AppUserRole.admin:
+        return Icons.admin_panel_settings;
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    if (_signingOut) return;
+    setState(() {
+      _signingOut = true;
+    });
+
+    var signOutSucceeded = false;
+
+    try {
+      try {
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          final push = PushNotificationService(Supabase.instance.client);
+          await push.removeDeviceToken(userId);
+          push.dispose();
+        }
+      } catch (e) {
+        debugPrint(
+          'Warning: failed to remove device token during sign-out: $e',
+        );
+      }
+      await Supabase.instance.client.auth.signOut();
+      signOutSucceeded = true;
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign out failed. Please try again.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _signingOut = false;
+        });
+      }
+    }
+
+    if (signOutSucceeded && mounted) {
+      // Pop back to root so AuthGate rebuilds to the login screen.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isSignedIn = Supabase.instance.client.auth.currentUser != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -159,6 +250,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 24),
 
+            if (widget.roles.length > 1) ...[
+              Text('Active profile', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Card(
+                child: Column(
+                  children: widget.roles
+                      .map(
+                        (role) => ListTile(
+                          leading: Radio<String>(
+                            value: role.id,
+                            // ignore: deprecated_member_use
+                            groupValue: _selectedRoleId,
+                            // ignore: deprecated_member_use
+                            onChanged: (_) => _selectRole(role),
+                          ),
+                          title: Text(role.displayLabel),
+                          trailing: Icon(
+                            _roleIcon(role.role),
+                            color: role.id == _selectedRoleId
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             // Reload button
             FilledButton.tonal(
               onPressed: () async {
@@ -181,6 +302,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
               child: const Text('Reload profile'),
             ),
+            const SizedBox(height: 12),
+            if (isSignedIn)
+              FilledButton.icon(
+                onPressed: _signingOut ? null : _handleSignOut,
+                icon: _signingOut
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.logout),
+                label: const Text('Log off'),
+              ),
           ],
         ),
       ),

@@ -6,6 +6,9 @@ class ShopperDashboard extends StatefulWidget {
     required this.repository,
     required this.profileRepository,
     required this.onReloadRequested,
+    required this.roles,
+    required this.activeRole,
+    required this.onRoleChanged,
     this.userEmail,
     super.key,
   });
@@ -14,6 +17,9 @@ class ShopperDashboard extends StatefulWidget {
   final DashboardRepository repository;
   final ProfileRepository profileRepository;
   final VoidCallback onReloadRequested;
+  final List<RoleAssignment> roles;
+  final RoleAssignment activeRole;
+  final ValueChanged<RoleAssignment> onRoleChanged;
   final String? userEmail;
 
   @override
@@ -24,12 +30,14 @@ class _HomeHeader extends StatelessWidget {
   const _HomeHeader({
     required this.profile,
     required this.notificationCount,
+    required this.onNotificationsPressed,
     this.userEmail,
   });
 
   final UserProfile profile;
   final int notificationCount;
   final String? userEmail;
+  final VoidCallback onNotificationsPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +88,7 @@ class _HomeHeader extends StatelessWidget {
           children: [
             IconButton(
               tooltip: 'Notifications',
-              onPressed: () {},
+              onPressed: onNotificationsPressed,
               icon: Icon(
                 Icons.notifications_active_outlined,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -281,6 +289,425 @@ class _InlineNotificationBanner extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _NotificationsSheet extends StatelessWidget {
+  const _NotificationsSheet({
+    required this.notifications,
+    required this.isLoading,
+    required this.readNotificationIds,
+    this.errorMessage,
+    this.onNotificationTap,
+    this.onRefresh,
+    this.onRetry,
+    this.onMarkAllRead,
+  });
+
+  final List<UserNotification> notifications;
+  final bool isLoading;
+  final Set<String> readNotificationIds;
+  final String? errorMessage;
+  final ValueChanged<UserNotification>? onNotificationTap;
+  final Future<void> Function()? onRefresh;
+  final VoidCallback? onRetry;
+  final VoidCallback? onMarkAllRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasUnread = notifications.any(
+      (notification) => !readNotificationIds.contains(notification.id),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Row(
+            children: [
+              Text(
+                'Notifications',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              if (hasUnread && onMarkAllRead != null)
+                TextButton(
+                  onPressed: onMarkAllRead,
+                  child: const Text('Mark all read'),
+                ),
+            ],
+          ),
+        ),
+        if (isLoading && notifications.isNotEmpty)
+          const LinearProgressIndicator(minHeight: 2),
+        if (errorMessage != null && notifications.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: _NotificationErrorBanner(
+              message: errorMessage!,
+              onRetry: onRetry,
+            ),
+          ),
+        Expanded(child: _buildBody(context)),
+      ],
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (isLoading && notifications.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (errorMessage != null && notifications.isEmpty) {
+      return _NotificationsEmptyState(
+        icon: Icons.wifi_off_rounded,
+        title: 'Unable to load notifications',
+        message: 'Check your connection and try again.',
+        actionLabel: 'Retry',
+        onAction: onRetry,
+      );
+    }
+
+    if (notifications.isEmpty) {
+      return const _NotificationsEmptyState(
+        icon: Icons.notifications_off_rounded,
+        title: 'No notifications yet',
+        message: 'You\'ll see order updates and helpful tips here.',
+      );
+    }
+
+    final listView = ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      itemCount: notifications.length,
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemBuilder: (context, index) {
+        final notification = notifications[index];
+        final isUnread = !readNotificationIds.contains(notification.id);
+        return _NotificationTile(
+          notification: notification,
+          isUnread: isUnread,
+          onTap: () => onNotificationTap?.call(notification),
+        );
+      },
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+    );
+
+    if (onRefresh != null) {
+      return RefreshIndicator(
+        onRefresh: onRefresh!,
+        edgeOffset: 20,
+        child: listView,
+      );
+    }
+
+    return listView;
+  }
+}
+
+class _NotificationsEmptyState extends StatelessWidget {
+  const _NotificationsEmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 48,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: onAction,
+                child: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationErrorBanner extends StatelessWidget {
+  const _NotificationErrorBanner({
+    required this.message,
+    this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: theme.colorScheme.error,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationTile extends StatelessWidget {
+  const _NotificationTile({
+    required this.notification,
+    required this.isUnread,
+    this.onTap,
+  });
+
+  final UserNotification notification;
+  final bool isUnread;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accentColor = _colorForNotificationType(
+      theme,
+      notification.type,
+    );
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isUnread
+              ? accentColor.withValues(alpha: 0.08)
+              : theme.colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isUnread
+                ? accentColor.withValues(alpha: 0.4)
+                : theme.colorScheme.outlineVariant,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _iconForNotificationType(notification.type),
+                color: accentColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notification.title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notification.body,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _formatRelativeTimestamp(notification.createdAt),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isUnread)
+              Container(
+                width: 10,
+                height: 10,
+                margin: const EdgeInsets.only(left: 8, top: 6),
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+const List<String> _monthLabels = <String>[
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+String _formatRelativeTimestamp(DateTime timestamp) {
+  final local = timestamp.toLocal();
+  final now = DateTime.now();
+  final diff = now.difference(local);
+
+  if (diff.inMinutes < 1) {
+    return 'Just now';
+  } else if (diff.inMinutes < 60) {
+    return '${diff.inMinutes}m ago';
+  } else if (diff.inHours < 24) {
+    return '${diff.inHours}h ago';
+  } else if (diff.inDays < 7) {
+    return '${diff.inDays}d ago';
+  } else if (diff.inDays < 365) {
+    final month = _monthLabels[local.month - 1];
+    return '$month ${local.day}';
+  } else {
+    final month = _monthLabels[local.month - 1];
+    return '$month ${local.day}, ${local.year}';
+  }
+}
+
+IconData _iconForNotificationType(String type) {
+  final normalized = type.toLowerCase();
+  switch (normalized) {
+    case 'ticket_reply':
+    case 'ticketreply':
+      return Icons.mark_chat_unread_outlined;
+    case 'ticket_status_change':
+    case 'ticketstatuschange':
+      return Icons.sync_rounded;
+    case 'ticket_escalated':
+    case 'ticketescalated':
+      return Icons.warning_amber_rounded;
+    case 'ticket_assigned':
+    case 'ticketassigned':
+      return Icons.assignment_ind_rounded;
+    case 'new_ticket':
+    case 'newticket':
+      return Icons.support_agent_rounded;
+    case 'sla_warning':
+    case 'slawarning':
+      return Icons.hourglass_bottom_rounded;
+    case 'sla_breached':
+    case 'slabreached':
+      return Icons.report_problem_outlined;
+    default:
+      return Icons.notifications_active_rounded;
+  }
+}
+
+Color _colorForNotificationType(ThemeData theme, String type) {
+  final normalized = type.toLowerCase();
+  switch (normalized) {
+    case 'ticket_reply':
+    case 'ticketreply':
+      return theme.colorScheme.primary;
+    case 'ticket_status_change':
+    case 'ticketstatuschange':
+      return theme.colorScheme.secondary;
+    case 'ticket_escalated':
+    case 'ticketescalated':
+    case 'sla_warning':
+    case 'slawarning':
+      return theme.colorScheme.error;
+    case 'sla_breached':
+    case 'slabreached':
+      return theme.colorScheme.error;
+    case 'ticket_assigned':
+    case 'ticketassigned':
+    case 'new_ticket':
+    case 'newticket':
+      return theme.colorScheme.tertiary;
+    default:
+      return theme.colorScheme.primary;
   }
 }
 
@@ -1021,6 +1448,11 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   final ValueNotifier<int> _favoritesCount = ValueNotifier<int>(0);
   int _favoritesStatusVersion = 0;
   Timer? _searchDebounce;
+  List<UserNotification> _notifications = const <UserNotification>[];
+  final Set<String> _acknowledgedNotificationIds = <String>{};
+  bool _notificationsInitialized = false;
+  bool _notificationLoading = false;
+  String? _notificationError;
 
   // Filters are loaded from the server (categories) at runtime. The UI will
   // construct a local filter list from the categories returned by
@@ -1033,6 +1465,18 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _NavItem(icon: Icons.shopping_cart_rounded, label: 'Cart'),
     _NavItem(icon: Icons.person_rounded, label: 'Profile'),
   ];
+
+  int get _notificationBadgeCount {
+    if (_notifications.isEmpty) {
+      return 0;
+    }
+    return _notifications
+        .where(
+          (notification) =>
+              !_acknowledgedNotificationIds.contains(notification.id),
+        )
+        .length;
+  }
 
   static const List<_PromoBannerData> _defaultPromoBanners = [
     _PromoBannerData(
@@ -1071,6 +1515,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _startPromoAutoScroll();
     _loadCartCount();
     _loadFavoritesCount();
+    _loadNotifications();
   }
 
   Future<void> _loadCartCount() async {
@@ -1111,6 +1556,119 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
         });
       }
     }
+  }
+
+  Future<void> _loadNotifications() async {
+    if (!mounted) return;
+    setState(() {
+      _notificationLoading = true;
+      _notificationError = null;
+    });
+
+    try {
+      final notifications = await widget.repository.getRecentNotifications(
+        userId: widget.profile.userId,
+        limit: 20,
+      );
+      if (!mounted) return;
+      final notificationIds =
+          notifications.map((notification) => notification.id).toSet();
+      setState(() {
+        _notifications = notifications;
+        _notificationLoading = false;
+        _notificationsInitialized = true;
+        _notificationError = null;
+        _acknowledgedNotificationIds
+            .removeWhere((id) => !notificationIds.contains(id));
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _notificationError = e.toString();
+        _notificationLoading = false;
+        _notificationsInitialized = true;
+      });
+    }
+  }
+
+  Future<void> _refreshNotifications() {
+    return _loadNotifications();
+  }
+
+  void _markNotificationAsRead(UserNotification notification) {
+    if (_acknowledgedNotificationIds.contains(notification.id)) {
+      return;
+    }
+    setState(() {
+      _acknowledgedNotificationIds.add(notification.id);
+    });
+  }
+
+  void _markAllNotificationsRead() {
+    if (_notifications.isEmpty) return;
+    setState(() {
+      _acknowledgedNotificationIds
+          .addAll(_notifications.map((notification) => notification.id));
+    });
+  }
+
+  Future<void> _handleNotificationsPressed() async {
+    if (!_notificationsInitialized && !_notificationLoading) {
+      await _loadNotifications();
+    }
+
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, modalSetState) {
+            Future<void> refresh() async {
+              final future = _refreshNotifications();
+              if (!context.mounted) return;
+              modalSetState(() {});
+              await future;
+              if (!context.mounted) return;
+              modalSetState(() {});
+            }
+
+            void markRead(UserNotification notification) {
+              if (_acknowledgedNotificationIds.contains(notification.id)) {
+                return;
+              }
+              _markNotificationAsRead(notification);
+              if (!context.mounted) return;
+              modalSetState(() {});
+            }
+
+            void markAll() {
+              _markAllNotificationsRead();
+              if (!context.mounted) return;
+              modalSetState(() {});
+            }
+
+            return FractionallySizedBox(
+              heightFactor: 0.9,
+              child: _NotificationsSheet(
+                notifications: _notifications,
+                isLoading: _notificationLoading,
+                errorMessage: _notificationError,
+                readNotificationIds: _acknowledgedNotificationIds,
+                onNotificationTap: markRead,
+                onRefresh: refresh,
+                onRetry: () {
+                  refresh();
+                },
+                onMarkAllRead: markAll,
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _handleFavoriteStatusChanged(bool isFavorite) {
@@ -1414,6 +1972,9 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
           repository: widget.profileRepository,
           dashboardRepository: widget.repository,
           email: widget.userEmail,
+          roles: widget.roles,
+          activeRole: widget.activeRole,
+          onRoleChanged: widget.onRoleChanged,
           onReloadRequested: widget.onReloadRequested,
         ),
       ),
@@ -1506,7 +2067,8 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                       children: [
                         _HomeHeader(
                           profile: widget.profile,
-                          notificationCount: trendingProducts.isEmpty ? 0 : 3,
+                          notificationCount: _notificationBadgeCount,
+                          onNotificationsPressed: _handleNotificationsPressed,
                           userEmail: widget.userEmail,
                         ),
                         const SizedBox(height: 16),

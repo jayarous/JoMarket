@@ -117,6 +117,26 @@ class DashboardRepository {
     }
   }
 
+  Future<List<UserNotification>> getRecentNotifications({
+    required String userId,
+    int limit = 20,
+  }) async {
+    final response = await _client
+        .from('notifications')
+        .select('id,title,body,type,channel,payload,delivered,created_at')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    if (response is! List) {
+      return const [];
+    }
+
+    return response
+        .map((item) => UserNotification.fromMap(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<ProductDetail> loadProductDetail(String productId) async {
     final response = await _client
         .from('products')

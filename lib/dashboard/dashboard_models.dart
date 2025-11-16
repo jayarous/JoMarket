@@ -738,6 +738,49 @@ class HomePromo {
   }
 }
 
+class UserNotification {
+  UserNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.type,
+    required this.createdAt,
+    this.channel,
+    this.payload,
+    this.delivered = true,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final String type;
+  final DateTime createdAt;
+  final String? channel;
+  final Map<String, dynamic>? payload;
+  final bool delivered;
+
+  factory UserNotification.fromMap(Map<String, dynamic> map) {
+    Map<String, dynamic>? payload;
+    final rawPayload = map['payload'];
+    if (rawPayload is Map<String, dynamic>) {
+      payload = Map<String, dynamic>.from(rawPayload);
+    }
+
+    return UserNotification(
+      id: map['id'].toString(),
+      title: map['title'] as String? ?? 'Notification',
+      body: map['body'] as String? ?? '',
+      type: map['type'] as String? ?? 'unknown',
+      channel: map['channel'] as String?,
+      payload: payload,
+      delivered: map['delivered'] as bool? ?? true,
+      createdAt:
+          DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
+
 class ProductReview {
   ProductReview({
     required this.id,

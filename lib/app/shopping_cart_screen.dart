@@ -1193,18 +1193,27 @@ class _CartItemCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 8),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${item.currency} ${price.toStringAsFixed(2)}',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
+                        Expanded(
+                          child: Text(
+                            '${item.currency} ${price.toStringAsFixed(2)}',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Text(
-                          ' × ${item.quantity}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            ' × ${item.quantity}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.end,
                           ),
                         ),
                       ],
@@ -1272,12 +1281,19 @@ class _CartItemCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 12),
                         // Total Price
-                        Text(
-                          '${item.currency} ${total.toStringAsFixed(2)}',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              '${item.currency} ${total.toStringAsFixed(2)}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ],

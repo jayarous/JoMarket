@@ -25,9 +25,7 @@ class RoleDashboard extends StatefulWidget {
 }
 
 class _RoleDashboardState extends State<RoleDashboard> {
-  final Logger _logger = Logger('_RoleDashboardState');
   late RoleAssignment _activeRole;
-  bool _signingOut = false;
 
   @override
   void initState() {
@@ -57,58 +55,28 @@ class _RoleDashboardState extends State<RoleDashboard> {
     return shopperRole;
   }
 
-  Future<void> _signOut() async {
-    if (_signingOut) return;
+  void _updateActiveRole(RoleAssignment role) {
+    if (_activeRole.id == role.id) return;
     setState(() {
-      _signingOut = true;
+      _activeRole = role;
     });
-    try {
-      // Attempt to remove the device token for the signed-in user
-      try {
-        final userId = Supabase.instance.client.auth.currentUser?.id;
-        if (userId != null) {
-          final push = PushNotificationService(Supabase.instance.client);
-          await push.removeDeviceToken(userId);
-          push.dispose();
-        }
-      } catch (e) {
-        // Token removal is best-effort; continue with sign-out
-        _logger.warning(
-          'Warning: failed to remove device token during sign-out: $e',
-        );
-      }
-      await Supabase.instance.client.auth.signOut();
-    } on AuthException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign out failed. Please try again.')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _signingOut = false;
-        });
-      }
-    }
   }
 
-  IconData _getRoleIcon(AppUserRole role) {
-    switch (role) {
-      case AppUserRole.shopper:
-        return Icons.shopping_bag;
-      case AppUserRole.vendorOwner:
-      case AppUserRole.vendorStaff:
-        return Icons.store;
-      case AppUserRole.delivery:
-        return Icons.local_shipping;
-      case AppUserRole.admin:
-        return Icons.admin_panel_settings;
-    }
+  Future<void> _openProfileScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ProfileScreen(
+          profile: widget.profile,
+          repository: widget.profileRepository,
+          dashboardRepository: widget.dashboardRepository,
+          email: widget.session?.user.email,
+          roles: widget.roles,
+          activeRole: _activeRole,
+          onRoleChanged: _updateActiveRole,
+          onReloadRequested: widget.onReloadRequested,
+        ),
+      ),
+    );
   }
 
   @override
@@ -129,92 +97,19 @@ class _RoleDashboardState extends State<RoleDashboard> {
           ],
         ),
         actions: [
-          if (widget.roles.length > 1)
-            PopupMenuButton<RoleAssignment>(
-              tooltip: 'Switch view',
-              icon: Icon(_getRoleIcon(_activeRole.role), size: 28),
-              onSelected: (role) {
-                setState(() {
-                  _activeRole = role;
-                });
-              },
-              itemBuilder: (context) {
-                return widget.roles
-                    .map(
-                      (role) => PopupMenuItem<RoleAssignment>(
-                        value: role,
-                        child: Row(
-                          children: [
-                            Icon(
-                              _getRoleIcon(role.role),
-                              size: 20,
-                              color: role.role == _activeRole.role
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                role.displayLabel,
-                                style: TextStyle(
-                                  fontWeight: role.role == _activeRole.role
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: role.role == _activeRole.role
-                                      ? Theme.of(context).colorScheme.primary
-                                      : null,
-                                ),
-                              ),
-                            ),
-                            if (role.role == _activeRole.role)
-                              Icon(
-                                Icons.check,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList();
-              },
-            ),
-          if (widget.session != null) ...[
+          if (!isShopperView && widget.session != null) ...[
             IconButton(
               tooltip: 'Profile',
               icon: const Icon(Icons.account_circle),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => ProfileScreen(
-                      profile: widget.profile,
-                      repository: widget.profileRepository,
-                      dashboardRepository: widget.dashboardRepository,
-                      email: widget.session?.user.email,
-                      roles: widget.roles,
-                      onReloadRequested: widget.onReloadRequested,
-                    ),
-                  ),
-                );
-              },
+              onPressed: _openProfileScreen,
             ),
             IconButton(
               tooltip: 'Reload profile',
               icon: const Icon(Icons.refresh),
               onPressed: widget.onReloadRequested,
             ),
-            IconButton(
-              tooltip: 'Sign out',
-              icon: _signingOut
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.logout),
-              onPressed: _signingOut ? null : _signOut,
-            ),
-          ] else
+          ],
+          if (widget.session == null)
             IconButton(
               tooltip: 'Sign in',
               icon: const Icon(Icons.login),
@@ -230,6 +125,8 @@ class _RoleDashboardState extends State<RoleDashboard> {
           repository: widget.dashboardRepository,
           profileRepository: widget.profileRepository,
           onReloadRequested: widget.onReloadRequested,
+          roles: widget.roles,
+          onRoleChanged: _updateActiveRole,
           userEmail: widget.session?.user.email,
         ),
       ),
@@ -244,6 +141,8 @@ class _RoleContentCard extends StatelessWidget {
     required this.repository,
     required this.profileRepository,
     required this.onReloadRequested,
+    required this.roles,
+    required this.onRoleChanged,
     this.userEmail,
   });
 
@@ -252,6 +151,8 @@ class _RoleContentCard extends StatelessWidget {
   final DashboardRepository repository;
   final ProfileRepository profileRepository;
   final VoidCallback onReloadRequested;
+  final List<RoleAssignment> roles;
+  final ValueChanged<RoleAssignment> onRoleChanged;
   final String? userEmail;
 
   @override
@@ -264,6 +165,9 @@ class _RoleContentCard extends StatelessWidget {
           repository: repository,
           profileRepository: profileRepository,
           onReloadRequested: onReloadRequested,
+          roles: roles,
+          activeRole: role,
+          onRoleChanged: onRoleChanged,
           userEmail: userEmail,
         );
         break;
