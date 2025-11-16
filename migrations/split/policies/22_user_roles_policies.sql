@@ -5,6 +5,11 @@
 
 -- Drop existing policies if present so the file can be reapplied idempotently
 drop policy if exists "user_roles_self_read" on public.user_roles;
+drop policy if exists "user_roles_self_insert" on public.user_roles;
 
 create policy "user_roles_self_read" on public.user_roles
 for select using (auth.uid() = user_id);
+
+create policy "user_roles_self_insert" on public.user_roles
+  for insert
+  with check (auth.uid() = user_id);

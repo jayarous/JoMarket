@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window"]
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "tasks": {
+    "dev": "deno run --watch --allow-net --allow-env --allow-read index.ts",
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
+    "lint": "deno lint",
+    "check": "deno check index.ts",
+    "test": "deno test --allow-env --allow-net",
+    "validate": "deno fmt --check && deno lint && deno check index.ts"
+  },
+  "imports": {
+    "https://deno.land/std/": "https://deno.land/std@0.177.0/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.38.4"
+  }
+}

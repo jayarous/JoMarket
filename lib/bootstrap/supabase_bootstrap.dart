@@ -57,7 +57,26 @@ Future<void> bootstrapSupabase() async {
     );
   }
 
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  // Initialize Supabase. On a first run (fresh emulator / cleared storage)
+  // the framework may attempt to recover a non‑existent session and throw
+  // an AuthException about an invalid refresh token. We treat that as a
+  // benign "cold start" scenario and continue signed out.
+  try {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  } on AuthException catch (e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('invalid refresh token')) {
+      debugPrint(
+        'Supabase initialize: ignoring missing refresh token; starting signed-out.',
+      );
+      // We intentionally do NOT rethrow; app will present signed-out state.
+    } else {
+      rethrow;
+    }
+  } catch (e) {
+    // Allow other exception types to surface normally.
+    rethrow;
+  }
 
   assert(() {
     debugPrint('Supabase initialized at $supabaseUrl');

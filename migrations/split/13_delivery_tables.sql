@@ -35,6 +35,8 @@ create table if not exists public.shipments (
   vendor_id uuid null references public.vendors(id) on delete cascade,
   status shipment_status not null default 'pending',
   tracking_number text,
+  carrier_service_id uuid null references public.carrier_services(id) on delete set null,
+  carrier text,
   shipped_at timestamptz,
   delivered_at timestamptz,
   shipping_address_id uuid null references public.addresses(id) on delete set null,

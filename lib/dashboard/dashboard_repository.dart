@@ -447,6 +447,24 @@ class DashboardRepository {
 
   /// Get or create active cart for the current user
   Future<Cart> getOrCreateCart(String userId) async {
+    // Guard: if userId is not a UUID (e.g. anonymous 'guest'), avoid hitting
+    // UUID columns in Postgres and return an ephemeral empty cart.
+    const uuidPattern =
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+    final isUuid = RegExp(uuidPattern).hasMatch(userId);
+    if (!isUuid || userId.toLowerCase() == 'guest') {
+      debugPrint(
+        'getOrCreateCart: non-UUID user "$userId" -> returning ephemeral cart',
+      );
+      return Cart(
+        id: 'guest-local',
+        userId: userId,
+        status: 'active',
+        items: const [],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
     try {
       // Try to get existing active cart
       final existingCart = await _client

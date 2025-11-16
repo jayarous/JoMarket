@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../bootstrap/supabase_bootstrap.dart';
 import '../dialogs/password_reset_dialog.dart';
 
 enum _AuthMode { signIn, signUp }
@@ -101,14 +103,29 @@ class _AuthFormState extends State<AuthForm> {
 
     final auth = Supabase.instance.client.auth;
 
+    final forceBrowserOAuth = _shouldForceBrowserOAuth();
+
     try {
-      if (kIsWeb) {
-        await auth.signInWithOAuth(Provider.google);
-      } else {
-        await auth.signInWithOAuth(
-          Provider.google,
-          redirectTo: googleOAuthRedirectUri,
+      if (kIsWeb || forceBrowserOAuth) {
+        await _launchSupabaseOAuth(
+          auth,
+          kIsWeb ? '${Uri.base.origin}/auth-callback' : 'com.jomarket.app://auth-callback',
         );
+        return;
+      }
+
+      try {
+        await _signInWithGoogleNative(auth);
+        return;
+      } on PlatformException catch (error) {
+        if (_shouldFallbackToBrowserFlow(error)) {
+          await _launchSupabaseOAuth(
+            auth,
+            'com.jomarket.app://auth-callback',
+          );
+          return;
+        }
+        rethrow;
       }
     } on AuthException catch (error) {
       if (!mounted) {
@@ -117,12 +134,12 @@ class _AuthFormState extends State<AuthForm> {
       setState(() {
         _errorMessage = error.message;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _errorMessage = 'Google sign in failed. Please try again.';
+        _errorMessage = 'Google sign in failed: ${error.toString()}';
       });
     } finally {
       if (mounted) {
@@ -131,6 +148,107 @@ class _AuthFormState extends State<AuthForm> {
         });
       }
     }
+  }
+
+  String _resolveGoogleServerClientId() {
+    const defineClientId = String.fromEnvironment(
+      'GOOGLE_SERVER_CLIENT_ID',
+      defaultValue: '',
+    );
+    if (defineClientId.trim().isNotEmpty) {
+      return defineClientId.trim();
+    }
+    final envClientId = dotenv.env['GOOGLE_SERVER_CLIENT_ID'];
+    return envClientId?.trim() ?? '';
+  }
+
+  bool _shouldForceBrowserOAuth() {
+    const defineValue = String.fromEnvironment(
+      'FORCE_GOOGLE_WEB_OAUTH',
+      defaultValue: '',
+    );
+    if (_looksLikeTrue(defineValue)) {
+      return true;
+    }
+    final envValue = dotenv.env['FORCE_GOOGLE_WEB_OAUTH'];
+    if (envValue == null) {
+      return false;
+    }
+    return _looksLikeTrue(envValue);
+  }
+
+  bool _looksLikeTrue(String value) {
+    switch (value.trim().toLowerCase()) {
+      case '1':
+      case 'true':
+      case 'yes':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> _signInWithGoogleNative(GoTrueClient auth) async {
+    final clientId = _resolveGoogleServerClientId();
+    if (clientId.isEmpty) {
+      setState(() {
+        _errorMessage = 'GOOGLE_SERVER_CLIENT_ID is missing. '
+            'Add it to your .env or pass it via --dart-define.';
+      });
+      throw Exception('Missing GOOGLE_SERVER_CLIENT_ID.');
+    }
+
+    final googleSignIn = GoogleSignIn(
+      scopes: const ['email', 'profile'],
+      serverClientId: clientId,
+    );
+
+    try {
+      await googleSignIn.signOut();
+    } catch (_) {
+      // Ignore failures while clearing cached accounts; they're non-fatal.
+    }
+
+    final account = await googleSignIn.signIn();
+    if (account == null) {
+      setState(() {
+        _errorMessage = 'Google sign in was cancelled.';
+      });
+      throw Exception('Google sign-in aborted by user.');
+    }
+
+    final tokens = await account.authentication;
+    final idToken = tokens.idToken;
+    final accessToken = tokens.accessToken;
+
+    if (idToken == null || accessToken == null) {
+      throw Exception('Missing ID or access token from Google Sign-In.');
+    }
+
+    await auth.signInWithIdToken(
+      provider: Provider.google,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+  }
+
+  bool _shouldFallbackToBrowserFlow(PlatformException exception) {
+    if (exception.code == 'network_error') {
+      return true;
+    }
+    final message = (exception.message ?? '').toLowerCase();
+    return message.contains('status{statuscode=network_error') ||
+        message.contains('apiexception: 7');
+  }
+
+  Future<void> _launchSupabaseOAuth(
+    GoTrueClient auth,
+    String redirectTo,
+  ) {
+    return auth.signInWithOAuth(
+      Provider.google,
+      redirectTo: redirectTo,
+    );
   }
 
   Future<void> _continueAsGuest() async {

@@ -25,6 +25,7 @@ class RoleDashboard extends StatefulWidget {
 }
 
 class _RoleDashboardState extends State<RoleDashboard> {
+  final Logger _logger = Logger('_RoleDashboardState');
   late RoleAssignment _activeRole;
   bool _signingOut = false;
 
@@ -62,6 +63,20 @@ class _RoleDashboardState extends State<RoleDashboard> {
       _signingOut = true;
     });
     try {
+      // Attempt to remove the device token for the signed-in user
+      try {
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          final push = PushNotificationService(Supabase.instance.client);
+          await push.removeDeviceToken(userId);
+          push.dispose();
+        }
+      } catch (e) {
+        // Token removal is best-effort; continue with sign-out
+        _logger.warning(
+          'Warning: failed to remove device token during sign-out: $e',
+        );
+      }
       await Supabase.instance.client.auth.signOut();
     } on AuthException catch (error) {
       if (!mounted) return;

@@ -87,6 +87,13 @@ class _VendorDashboardState extends State<VendorDashboard> {
               assignment: widget.assignment,
             ),
             const SizedBox(height: 16),
+            _SellerHubButton(
+              vendorId: widget.assignment.vendorId!,
+              vendorName: vendorLabel,
+              assignment: widget.assignment,
+              profile: widget.profile,
+            ),
+            const SizedBox(height: 16),
             _SectionHeader(
               title: 'Recent products',
               action: Row(
@@ -216,4 +223,79 @@ void _navigateToShipmentEdit(BuildContext context, String shipmentId) {
           ShipmentEditScreen(vendorId: vendorId, shipmentId: shipmentId),
     ),
   );
+}
+
+class _SellerHubButton extends StatelessWidget {
+  const _SellerHubButton({
+    required this.vendorId,
+    required this.vendorName,
+    required this.assignment,
+    required this.profile,
+  });
+
+  final String vendorId;
+  final String vendorName;
+  final RoleAssignment assignment;
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (context) => SellerHubShell(
+                vendorId: vendorId,
+                vendorName: vendorName,
+                assignment: assignment,
+                userId: profile.userId,
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.store,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Open Seller Hub',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Manage catalog, orders, support tickets, and analytics',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

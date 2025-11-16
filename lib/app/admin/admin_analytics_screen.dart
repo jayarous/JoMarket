@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'moderation/moderation_dashboard.dart';
 
 class AdminAnalyticsScreen extends StatefulWidget {
   const AdminAnalyticsScreen({super.key});
@@ -224,9 +225,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         subtitle: const Text('Review flagged content'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Moderation queue coming soon'),
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  const ModerationDashboardScreen(),
                             ),
                           );
                         },
@@ -239,9 +241,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         subtitle: const Text('Handle customer inquiries'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Support tickets coming soon'),
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  const ModerationDashboardScreen(),
                             ),
                           );
                         },

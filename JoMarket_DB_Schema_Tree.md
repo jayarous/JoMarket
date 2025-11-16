@@ -340,6 +340,8 @@ support_tickets ||--o{ ticket_messages
 - `vendor_id uuid null` (FK -> `vendors.id`)
 - `status shipment_status default 'pending'`
 - `tracking_number text`
+- `carrier_service_id uuid null` (FK -> `carrier_services.id`)
+- `carrier text`
 - `shipped_at timestamptz`, `delivered_at timestamptz`
 - `shipping_address_id uuid null` (FK -> `addresses.id`)
 - `visibility job_visibility default 'private'`

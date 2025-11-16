@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'delivery_service.dart';
+import 'proof_of_delivery_screen.dart';
 
 class DeliveryJobScreen extends StatefulWidget {
   const DeliveryJobScreen({
@@ -16,6 +18,7 @@ class DeliveryJobScreen extends StatefulWidget {
 }
 
 class _DeliveryJobScreenState extends State<DeliveryJobScreen> {
+  late final DeliveryService _service;
   ShipmentDetail? _shipment;
   bool _isLoading = true;
   String? _error;
@@ -23,6 +26,7 @@ class _DeliveryJobScreenState extends State<DeliveryJobScreen> {
   @override
   void initState() {
     super.initState();
+    _service = DeliveryService(Supabase.instance.client);
     _loadShipment();
   }
 
@@ -87,55 +91,24 @@ class _DeliveryJobScreenState extends State<DeliveryJobScreen> {
   }
 
   Future<void> _completeJob() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Complete Delivery'),
-        content: const Text(
-          'Confirm that this delivery has been completed successfully.',
+    // Navigate to proof of delivery screen
+    final pod = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProofOfDeliveryScreen(
+          shipmentId: widget.shipmentId,
+          staffId: widget.staffId,
+          service: _service,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Confirm'),
-          ),
-        ],
       ),
     );
 
-    if (confirmed != true) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await Supabase.instance.client
-          .from('shipments')
-          .update({
-            'status': 'delivered',
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', widget.shipmentId);
-
+    // If POD was submitted, reload the shipment
+    if (pod != null && mounted) {
       await _loadShipment();
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Delivery completed!')));
-      }
-    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to complete delivery: $e')),
+          const SnackBar(content: Text('Delivery completed successfully!')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -276,8 +249,8 @@ class _DeliveryJobScreenState extends State<DeliveryJobScreen> {
                     _shipment!.status != 'delivered') ...[
                   ElevatedButton.icon(
                     onPressed: _completeJob,
-                    icon: const Icon(Icons.done_all),
-                    label: const Text('Complete Delivery'),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Capture Proof of Delivery'),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(

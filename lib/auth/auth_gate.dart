@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:jo_market/app/shared/services/push_notification_service.dart';
+import 'package:jo_market/app/shared/pages/ticket_deeplink_page.dart';
 
 import '../app/role_aware_home.dart';
 import 'dialogs/password_update_dialog.dart';
@@ -18,13 +21,20 @@ class _AuthGateState extends State<AuthGate> {
   Session? _session;
   bool _isGuest = false;
   late final StreamSubscription<AuthState> _authSubscription;
+  late final PushNotificationService _pushService = PushNotificationService(
+    Supabase.instance.client,
+  );
+  StreamSubscription<NotificationPayload>? _notificationTapSubscription;
   bool _handlingPasswordRecovery = false;
+  late final Logger _logger = Logger('AuthGate');
 
   @override
   void initState() {
     super.initState();
     final auth = Supabase.instance.client.auth;
     _session = auth.currentSession;
+    // Initialize push notifications if there's an existing session
+    _maybeInitPush(_session);
     _authSubscription = auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.passwordRecovery) {
         _handlePasswordRecovery();
@@ -35,13 +45,47 @@ class _AuthGateState extends State<AuthGate> {
           _isGuest = false;
         }
       });
+      // Initialize or teardown push notifications on auth changes
+      _maybeInitPush(data.session);
     });
   }
 
   @override
   void dispose() {
     _authSubscription.cancel();
+    _notificationTapSubscription?.cancel();
+    _pushService.dispose();
     super.dispose();
+  }
+
+  void _maybeInitPush(Session? session) {
+    if (session == null) {
+      try {
+        _pushService.dispose();
+      } catch (_) {}
+      return;
+    }
+
+    final userId = session.user.id;
+
+    // Fire-and-forget initialization; service handles token refreshes itself
+    _pushService
+        .initialize(userId: userId, onNotificationReceived: (_) {})
+        .catchError((e) => _logger.severe('Push init error: $e'));
+
+    // Listen for notification taps and deep-link to ticket view
+    _notificationTapSubscription?.cancel();
+    _notificationTapSubscription = _pushService.onNotificationTapped.listen((
+      payload,
+    ) {
+      if (payload.ticketId == null) return;
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => TicketDeepLinkPage(ticketId: payload.ticketId!),
+        ),
+      );
+    });
   }
 
   void _setGuest() {
