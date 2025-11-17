@@ -1,9 +1,11 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' show StripeException;
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
+import 'payments/payment_service.dart';
 
 enum CheckoutStep { shipping, payment, review }
 
@@ -34,6 +36,7 @@ class CheckoutWizardScreen extends StatefulWidget {
 }
 
 class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
+  final PaymentService _paymentService = PaymentService();
   CheckoutStep _currentStep = CheckoutStep.shipping;
   final _notesController = TextEditingController();
 
@@ -41,10 +44,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   List<Address> _addresses = [];
   Address? _selectedAddress;
   ShippingOption? _selectedShipping;
+  CheckoutQuote? _quote;
   CheckoutPaymentMethod _paymentMethod = CheckoutPaymentMethod.card;
   CheckoutOrderReceipt? _receipt;
   bool _isLoadingAddresses = true;
-  bool _isLoadingShipping = true;
+  bool _isLoadingQuote = false;
   bool _isPlacingOrder = false;
   String? _addressError;
   String? _shippingError;
@@ -54,28 +58,45 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   void initState() {
     super.initState();
     _loadAddresses();
-    _loadShippingOptions();
   }
 
-  Future<void> _loadShippingOptions() async {
+  Future<void> _refreshQuote({String? rateToken}) async {
+    final address = _selectedAddress;
+    if (address == null) return;
+
     setState(() {
-      _isLoadingShipping = true;
+      _isLoadingQuote = true;
       _shippingError = null;
     });
 
     try {
-      final options = await widget.repository.getShippingOptions();
+      final quote = await widget.repository.fetchCheckoutQuote(
+        cart: widget.cart,
+        addressId: address.id,
+        shippingRateToken: rateToken ?? _selectedShipping?.rateToken,
+      );
       if (!mounted) return;
+      ShippingOption? selected;
+      for (final option in quote.shippingOptions) {
+        final token = option.rateToken ?? option.id;
+        if (token == quote.selectedRateToken) {
+          selected = option;
+          break;
+        }
+      }
+      selected ??=
+          quote.shippingOptions.isNotEmpty ? quote.shippingOptions.first : null;
       setState(() {
-        _shippingOptions = options;
-        _selectedShipping = options.isNotEmpty ? options.first : null;
+        _quote = quote;
+        _shippingOptions = quote.shippingOptions;
+        _selectedShipping = selected;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _shippingError = e.toString());
     } finally {
       if (mounted) {
-        setState(() => _isLoadingShipping = false);
+        setState(() => _isLoadingQuote = false);
       }
     }
   }
@@ -87,10 +108,18 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   }
 
   CheckoutCharges get _charges {
+    final discount = widget.promoDiscountCents + widget.loyaltyCreditsCents;
+    if (_quote != null) {
+      return CheckoutCharges(
+        subtotalCents: _quote!.subtotalCents,
+        shippingCents: _quote!.shippingCents,
+        taxCents: _quote!.taxCents,
+        discountCents: discount,
+      );
+    }
     final subtotal = widget.cart.subtotalCents;
     final shipping = _selectedShipping?.feeCents ?? 0;
     final tax = (subtotal * 0.16).round();
-    final discount = widget.promoDiscountCents + widget.loyaltyCreditsCents;
     return CheckoutCharges(
       subtotalCents: subtotal,
       shippingCents: shipping,
@@ -121,6 +150,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _addresses = results;
         _selectedAddress = selected;
       });
+      if (selected != null) {
+        await _refreshQuote();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _addressError = e.toString());
@@ -152,6 +184,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _addresses.insert(0, created);
         _selectedAddress = created;
       });
+      await _refreshQuote();
     }
   }
 
@@ -215,6 +248,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
   }
 
+  Future<void> _onShippingOptionSelected(ShippingOption option) async {
+    setState(() {
+      _selectedShipping = option;
+    });
+    await _refreshQuote(rateToken: option.rateToken ?? option.id);
+  }
+
   Future<void> _placeOrder() async {
     if (_selectedAddress == null || _selectedShipping == null) {
       setState(() {
@@ -229,17 +269,30 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     });
 
     try {
-      // Create payment intent first
-      await widget.repository.createPaymentIntent(
-        amountCents: _charges.totalCents,
-        currency: widget.cart.currency,
-        paymentMethod: _paymentMethod,
-      );
+      if (_paymentMethod == CheckoutPaymentMethod.card) {
+        final draft = await widget.repository.createOrderDraft(
+          userId: widget.userId,
+          cart: widget.cart,
+          charges: _charges,
+          shippingAddressId: _selectedAddress!.id,
+          billingAddressId: _selectedAddress!.id,
+          notes: _notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim(),
+          shippingOption: _selectedShipping!,
+        );
 
-      if (!mounted) return;
-
-      // For card payments, in a real app you would handle the payment here
-      // For now, we'll proceed directly to order placement
+        final sheetIntent = await widget.repository
+            .createStripePaymentIntent(draft.orderId);
+        await _paymentService.confirmWithPaymentSheet(sheetIntent);
+        final receipt = await widget.repository.confirmStripePayment(
+          orderId: draft.orderId,
+          paymentIntentId: sheetIntent.paymentIntentId,
+        );
+        if (!mounted) return;
+        setState(() => _receipt = receipt);
+        return;
+      }
 
       final receipt = await widget.repository.placeOrder(
         userId: widget.userId,
@@ -251,10 +304,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        shippingOption: _selectedShipping,
       );
       if (!mounted) return;
+      setState(() => _receipt = receipt);
+    } on StripeException catch (e) {
       setState(() {
-        _receipt = receipt;
+        _submitError = e.error.message ?? 'Payment cancelled';
       });
     } catch (e) {
       if (!mounted) return;
@@ -456,7 +512,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_isLoadingShipping)
+        if (_isLoadingQuote)
           const Card(
             child: Padding(
               padding: EdgeInsets.all(24),
@@ -480,7 +536,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   Text(_shippingError!),
                   const SizedBox(height: 8),
                   TextButton.icon(
-                    onPressed: _loadShippingOptions,
+                    onPressed: _refreshQuote,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
                   ),
@@ -501,14 +557,21 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               child: RadioListTile<ShippingOption>(
                 value: option,
                 groupValue: _selectedShipping,
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedShipping = value);
-                  }
-                },
+                onChanged: _isLoadingQuote
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          _onShippingOptionSelected(value);
+                        }
+                      },
                 title: Text(option.label),
                 subtitle: Text(
-                  '${option.description}\nEstimated delivery: ${option.estimatedDays} days',
+                  [
+                    if (option.description.isNotEmpty) option.description,
+                    if (option.estimatedDays != null)
+                      'Estimated delivery: ${option.estimatedDays} days',
+                    if (option.carrier != null) 'Carrier: ${option.carrier}',
+                  ].where((line) => line.isNotEmpty).join('\n'),
                 ),
                 secondary: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -551,7 +614,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     setState(() => _paymentMethod = value);
                   }
                 },
-                title: const Text('Card Payment (Mock)'),
+                title: const Text('Card Payment (Stripe)'),
                 subtitle: const Text('Secure payment, instant confirmation'),
                 secondary: Icon(
                   Icons.credit_card,
@@ -700,7 +763,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Estimated delivery: ${_selectedShipping!.estimatedDays} days',
+                              _selectedShipping!.estimatedDays != null
+                                  ? 'Estimated delivery: ${_selectedShipping!.estimatedDays} days'
+                                  : 'Delivery window shared after dispatch',
                               style: theme.textTheme.bodySmall,
                             ),
                           ),
@@ -765,7 +830,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _paymentMethod == CheckoutPaymentMethod.card
-                      ? 'Card Payment (Mock)'
+                      ? 'Card Payment (Stripe)'
                       : 'Cash on Delivery',
                   style: theme.textTheme.bodyMedium,
                 ),
@@ -791,7 +856,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   value: _formatMoney(charges.shippingCents),
                 ),
                 _SummaryRow(
-                  label: 'Tax (16%)',
+                  label: 'Tax',
                   value: _formatMoney(charges.taxCents),
                 ),
                 if (charges.discountCents > 0)

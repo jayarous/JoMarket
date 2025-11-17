@@ -409,6 +409,9 @@ class SellerRepository {
             visibility,
             tracking_number,
             carrier,
+            shipping_rate_token,
+            label_url,
+            label_tracking_url,
             posted_at,
             updated_at,
             shipping_address:addresses!shipments_shipping_address_id_fkey (
@@ -681,6 +684,9 @@ class SellerRepository {
             visibility,
             tracking_number,
             carrier,
+            shipping_rate_token,
+            label_url,
+            label_tracking_url,
             posted_at,
             updated_at,
             shipping_address:addresses!shipments_shipping_address_id_fkey (
@@ -701,6 +707,13 @@ class SellerRepository {
       return VendorShipmentInfo.fromMap(existing as Map<String, dynamic>);
     }
 
+    final orderRate = await _client
+        .from('orders')
+        .select('shipping_rate_token')
+        .eq('id', orderId)
+        .maybeSingle();
+    final shippingRateToken = orderRate?['shipping_rate_token'] as String?;
+
     final inserted = await _client
         .from('shipments')
         .insert({
@@ -708,6 +721,7 @@ class SellerRepository {
           'vendor_id': vendorId,
           'status': 'pending',
           'visibility': 'private',
+          'shipping_rate_token': shippingRateToken,
         })
         .select('''
             id,
@@ -716,6 +730,9 @@ class SellerRepository {
             visibility,
             tracking_number,
             carrier,
+            shipping_rate_token,
+            label_url,
+            label_tracking_url,
             posted_at,
             updated_at,
             shipping_address:addresses!shipments_shipping_address_id_fkey (
@@ -792,6 +809,30 @@ class SellerRepository {
         if (staffId != null) 'staff_id': staffId,
       },
     });
+  }
+
+  Future<SellerConnectStatus> getStripeConnectStatus({
+    required String vendorId,
+    required Uri returnUrl,
+    required Uri refreshUrl,
+  }) async {
+    final response = await _client.functions.invoke(
+      'vendor-stripe-connect',
+      body: {
+        'vendorId': vendorId,
+        'returnUrl': returnUrl.toString(),
+        'refreshUrl': refreshUrl.toString(),
+      },
+    );
+
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      return SellerConnectStatus.fromMap(
+        Map<String, dynamic>.from(data),
+      );
+    }
+
+    throw StateError('vendor-stripe-connect returned no data');
   }
 
   /// Get product variants

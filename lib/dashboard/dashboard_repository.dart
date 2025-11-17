@@ -819,32 +819,35 @@ class DashboardRepository {
         .eq('id', addressId);
   }
 
-  /// Fetch available shipping options
-  Future<List<ShippingOption>> getShippingOptions() async {
+  /// Fetch checkout quote (shipping rates + tax) from the shipping function.
+  Future<CheckoutQuote> fetchCheckoutQuote({
+    required Cart cart,
+    required String addressId,
+    String? shippingRateToken,
+  }) async {
     try {
-      final response = await _client
-          .from('shipping_options')
-          .select('id,label,description,fee_cents,estimated_days,is_active')
-          .eq('is_active', true)
-          .order('fee_cents');
-
-      return (response as List<dynamic>)
-          .map(
-            (item) =>
-                ShippingOption.fromMap(Map<String, dynamic>.from(item as Map)),
-          )
-          .toList();
+      final response = await _client.functions.invoke(
+        'checkout-quote',
+        body: <String, dynamic>{
+          'cartId': cart.id,
+          'addressId': addressId,
+          if (shippingRateToken != null) 'shippingRateToken': shippingRateToken,
+        },
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return CheckoutQuote.fromMap(data);
+      }
+      throw StateError('checkout-quote returned unexpected payload');
     } catch (e) {
-      debugPrint('Failed to fetch shipping options: $e');
-      // Return default options if table doesn't exist
-      return [
+      debugPrint('checkout-quote fallback: $e');
+      final fallbackOptions = [
         ShippingOption(
           id: 'standard',
           label: 'Standard Delivery',
           description: '2-3 business days',
           feeCents: 250,
           estimatedDays: 3,
-          isActive: true,
         ),
         ShippingOption(
           id: 'express',
@@ -852,52 +855,24 @@ class DashboardRepository {
           description: 'Next-day delivery',
           feeCents: 500,
           estimatedDays: 1,
-          isActive: true,
         ),
       ];
-    }
-  }
-
-  /// Create a payment intent for an order
-  Future<PaymentIntent> createPaymentIntent({
-    required int amountCents,
-    required String currency,
-    required CheckoutPaymentMethod paymentMethod,
-  }) async {
-    try {
-      final provider = paymentMethod == CheckoutPaymentMethod.cashOnDelivery
-          ? 'cod'
-          : 'stripe';
-
-      final response = await _client
-          .from('payment_intents')
-          .insert({
-            'amount_cents': amountCents,
-            'currency': currency,
-            'provider': provider,
-            'status': 'pending',
-            'created_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .select('id,amount_cents,currency,status,client_secret,provider')
-          .single();
-
-      return PaymentIntent.fromMap(Map<String, dynamic>.from(response));
-    } catch (e) {
-      debugPrint('Failed to create payment intent: $e');
-      // Return a mock payment intent if table doesn't exist
-      return PaymentIntent(
-        id: 'mock_${DateTime.now().millisecondsSinceEpoch}',
-        amountCents: amountCents,
-        currency: currency,
-        status: 'pending',
-        provider: paymentMethod == CheckoutPaymentMethod.cashOnDelivery
-            ? 'cod'
-            : 'mock',
+      return CheckoutQuote(
+        subtotalCents: cart.subtotalCents,
+        shippingCents: fallbackOptions.first.feeCents,
+        taxCents: (cart.subtotalCents * 0.16).round(),
+        totalCents: cart.subtotalCents +
+            fallbackOptions.first.feeCents +
+            (cart.subtotalCents * 0.16).round(),
+        currency: cart.currency,
+        shippingOptions: fallbackOptions,
+        selectedRateToken: fallbackOptions.first.id,
+        validationStatus: null,
       );
     }
   }
 
-  /// Convert the given cart into a placed order with a mock payment.
+  /// Convert the given cart into a placed order with COD payment.
   Future<CheckoutOrderReceipt> placeOrder({
     required String userId,
     required Cart cart,
@@ -906,19 +881,140 @@ class DashboardRepository {
     String? billingAddressId,
     required CheckoutPaymentMethod paymentMethod,
     String? notes,
+    ShippingOption? shippingOption,
+  }) async {
+    final result = await _createOrderRecord(
+      userId: userId,
+      cart: cart,
+      charges: charges,
+      shippingAddressId: shippingAddressId,
+      billingAddressId: billingAddressId,
+      paymentMethod: paymentMethod,
+      notes: notes,
+      shippingOption: shippingOption,
+    );
+
+    if (paymentMethod == CheckoutPaymentMethod.cashOnDelivery) {
+      await _client.from('payments').insert({
+        'order_id': result.orderId,
+        'provider': 'cod',
+        'status': 'pending',
+        'amount_cents': charges.totalCents,
+        'currency': cart.currency,
+        'raw_response': {'method': 'cod'},
+      });
+    }
+
+    await _markCartProcessed(cart);
+
+    return CheckoutOrderReceipt(
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
+      status: result.status,
+      currency: result.currency,
+      totalCents: result.totalCents,
+      paymentStatus: paymentMethod == CheckoutPaymentMethod.cashOnDelivery
+          ? 'pending'
+          : 'requires_confirmation',
+    );
+  }
+
+  Future<CheckoutOrderDraft> createOrderDraft({
+    required String userId,
+    required Cart cart,
+    required CheckoutCharges charges,
+    required String shippingAddressId,
+    String? billingAddressId,
+    String? notes,
+    required ShippingOption shippingOption,
+  }) async {
+    final result = await _createOrderRecord(
+      userId: userId,
+      cart: cart,
+      charges: charges,
+      shippingAddressId: shippingAddressId,
+      billingAddressId: billingAddressId,
+      paymentMethod: CheckoutPaymentMethod.card,
+      notes: notes,
+      shippingOption: shippingOption,
+    );
+
+    await _markCartProcessed(cart);
+
+    return CheckoutOrderDraft(
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
+      currency: result.currency,
+      totalCents: result.totalCents,
+    );
+  }
+
+  Future<PaymentSheetIntent> createStripePaymentIntent(String orderId) async {
+    final response = await _client.functions.invoke(
+      'payments-create-intent',
+      body: {'orderId': orderId},
+    );
+
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      return PaymentSheetIntent.fromMap(data);
+    }
+    throw StateError('payments-create-intent returned no data');
+  }
+
+  Future<CheckoutOrderReceipt> confirmStripePayment({
+    required String orderId,
+    required String paymentIntentId,
+  }) async {
+    await _client.functions.invoke(
+      'payments-confirm-intent',
+      body: {
+        'orderId': orderId,
+        'paymentIntentId': paymentIntentId,
+      },
+    );
+
+    final order = await _client
+        .from('orders')
+        .select('id,order_number,status,total_cents,currency')
+        .eq('id', orderId)
+        .single();
+
+    return CheckoutOrderReceipt(
+      orderId: orderId,
+      orderNumber: order['order_number'] as String? ?? orderId,
+      status: order['status'] as String? ?? 'confirmed',
+      currency: order['currency'] as String? ?? 'JOD',
+      totalCents: order['total_cents'] as int? ?? 0,
+      paymentStatus: 'paid',
+    );
+  }
+
+  Future<void> _markCartProcessed(Cart cart) async {
+    await clearCart(cart.id);
+    await _client
+        .from('carts')
+        .update({'updated_at': DateTime.now().toIso8601String()})
+        .eq('id', cart.id);
+  }
+
+  Future<_OrderCreationResult> _createOrderRecord({
+    required String userId,
+    required Cart cart,
+    required CheckoutCharges charges,
+    required String shippingAddressId,
+    String? billingAddressId,
+    required CheckoutPaymentMethod paymentMethod,
+    String? notes,
+    ShippingOption? shippingOption,
   }) async {
     if (cart.items.isEmpty) {
       throw StateError('Cannot place an order with an empty cart.');
     }
 
-    final isCod = paymentMethod == CheckoutPaymentMethod.cashOnDelivery;
-    final orderStatus = isCod ? 'pending' : 'confirmed';
-    final paymentStatus = isCod ? 'pending' : 'paid';
-    final paymentProvider = isCod ? 'cod' : 'mock_card';
-
     final payload = <String, dynamic>{
       'user_id': userId,
-      'status': orderStatus,
+      'status': 'pending',
       'subtotal_cents': charges.subtotalCents,
       'discount_cents': charges.discountCents,
       'shipping_cents': charges.shippingCents,
@@ -928,6 +1024,7 @@ class DashboardRepository {
       'shipping_address_id': shippingAddressId,
       'billing_address_id': billingAddressId ?? shippingAddressId,
       'notes': notes,
+      'shipping_rate_token': shippingOption?.rateToken ?? shippingOption?.id,
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }..removeWhere((key, value) => value == null);
@@ -940,7 +1037,6 @@ class DashboardRepository {
 
     final orderId = orderResponse['id'] as String;
 
-    // Ensure every item has a vendor id, fetching missing ones if needed.
     final vendorLookup = <String, String>{};
     final missingVendorItems = cart.items
         .where((item) => item.vendorId == null)
@@ -987,28 +1083,12 @@ class DashboardRepository {
       await _client.from('order_items').insert(orderItemsPayload);
     }
 
-    await _client.from('payments').insert({
-      'order_id': orderId,
-      'provider': paymentProvider,
-      'status': paymentStatus,
-      'amount_cents': charges.totalCents,
-      'currency': cart.currency,
-      'raw_response': {'mock': true, 'method': paymentProvider},
-    });
-
-    await clearCart(cart.id);
-    await _client
-        .from('carts')
-        .update({'updated_at': DateTime.now().toIso8601String()})
-        .eq('id', cart.id);
-
-    return CheckoutOrderReceipt(
+    return _OrderCreationResult(
       orderId: orderId,
       orderNumber: orderResponse['order_number'] as String? ?? orderId,
-      status: orderResponse['status'] as String? ?? orderStatus,
+      status: orderResponse['status'] as String? ?? 'pending',
       currency: orderResponse['currency'] as String? ?? cart.currency,
       totalCents: orderResponse['total_cents'] as int? ?? charges.totalCents,
-      paymentStatus: paymentStatus,
     );
   }
 
@@ -1217,4 +1297,20 @@ class DashboardRepository {
       return [];
     }
   }
+}
+
+class _OrderCreationResult {
+  _OrderCreationResult({
+    required this.orderId,
+    required this.orderNumber,
+    required this.status,
+    required this.currency,
+    required this.totalCents,
+  });
+
+  final String orderId;
+  final String orderNumber;
+  final String status;
+  final String currency;
+  final int totalCents;
 }

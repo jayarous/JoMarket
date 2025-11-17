@@ -1,6 +1,6 @@
-import 'dart:math' as math;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'delivery_models.dart';
+import 'route_optimizer.dart';
 
 /// Service for managing delivery logistics, routing, and tracking
 class DeliveryService {
@@ -15,9 +15,9 @@ class DeliveryService {
     required List<RouteWaypoint> waypoints,
   }) async {
     // Simple route optimization using nearest neighbor algorithm
-    final optimizedOrder = _optimizeRoute(waypoints);
-    final distance = _calculateTotalDistance(waypoints, optimizedOrder);
-    final duration = _estimateDuration(distance);
+    final optimizedOrder = RouteOptimizer.optimizeOrder(waypoints);
+    final distance = RouteOptimizer.totalDistance(waypoints, optimizedOrder);
+    final duration = RouteOptimizer.estimateDuration(distance);
 
     final routeData = {
       'shipment_id': shipmentId,
@@ -438,97 +438,4 @@ class DeliveryService {
     return performances;
   }
 
-  /// Optimize route using nearest neighbor algorithm
-  List<int> _optimizeRoute(List<RouteWaypoint> waypoints) {
-    if (waypoints.length <= 2) {
-      return List.generate(waypoints.length, (i) => i);
-    }
-
-    final visited = <int>{};
-    final order = <int>[];
-    var current = 0; // Start with first waypoint
-
-    order.add(current);
-    visited.add(current);
-
-    while (visited.length < waypoints.length) {
-      var nearest = -1;
-      var minDistance = double.infinity;
-
-      for (var i = 0; i < waypoints.length; i++) {
-        if (visited.contains(i)) continue;
-
-        final distance = _calculateDistance(
-          waypoints[current].latitude,
-          waypoints[current].longitude,
-          waypoints[i].latitude,
-          waypoints[i].longitude,
-        );
-
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearest = i;
-        }
-      }
-
-      if (nearest != -1) {
-        order.add(nearest);
-        visited.add(nearest);
-        current = nearest;
-      }
-    }
-
-    return order;
-  }
-
-  /// Calculate total distance for route
-  double _calculateTotalDistance(
-    List<RouteWaypoint> waypoints,
-    List<int> order,
-  ) {
-    var totalDistance = 0.0;
-    for (var i = 0; i < order.length - 1; i++) {
-      final from = waypoints[order[i]];
-      final to = waypoints[order[i + 1]];
-      totalDistance += _calculateDistance(
-        from.latitude,
-        from.longitude,
-        to.latitude,
-        to.longitude,
-      );
-    }
-    return totalDistance;
-  }
-
-  /// Calculate distance between two coordinates (Haversine formula)
-  double _calculateDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const earthRadius = 6371000.0; // meters
-    final dLat = _toRadians(lat2 - lat1);
-    final dLon = _toRadians(lon2 - lon1);
-
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_toRadians(lat1)) *
-            math.cos(_toRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadius * c;
-  }
-
-  double _toRadians(double degrees) => degrees * math.pi / 180.0;
-
-  /// Estimate duration based on distance (assume 30 km/h average)
-  int _estimateDuration(double distanceMeters) {
-    const avgSpeedKmh = 30.0;
-    final distanceKm = distanceMeters / 1000.0;
-    final hours = distanceKm / avgSpeedKmh;
-    return (hours * 60).round();
-  }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:logging/logging.dart';
 
 import 'app/app.dart';
@@ -24,5 +26,24 @@ Future<void> main() async {
   await FirebaseInitializer.initialize();
 
   await bootstrapSupabase();
+  await _bootstrapStripe();
   runApp(const MyApp());
+}
+
+Future<void> _bootstrapStripe() async {
+  const fromDefine = String.fromEnvironment('STRIPE_PUBLISHABLE_KEY');
+  final publishableKey = fromDefine.isNotEmpty
+      ? fromDefine
+      : (dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '');
+
+  if (publishableKey.isEmpty) {
+    debugPrint(
+      'STRIPE_PUBLISHABLE_KEY not provided; card payments are disabled.',
+    );
+    return;
+  }
+
+  Stripe.publishableKey = publishableKey;
+  Stripe.merchantIdentifier = 'merchant.com.jomarket.app';
+  await Stripe.instance.applySettings();
 }

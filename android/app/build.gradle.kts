@@ -16,7 +16,6 @@ val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 }
-
 android {
     namespace = "com.jomarket.app"
     compileSdk = flutter.compileSdkVersion

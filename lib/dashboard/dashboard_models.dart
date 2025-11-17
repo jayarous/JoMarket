@@ -554,22 +554,44 @@ class CheckoutCharges {
       subtotalCents - discountCents + shippingCents + taxCents;
 }
 
+class CheckoutOrderDraft {
+  CheckoutOrderDraft({
+    required this.orderId,
+    required this.orderNumber,
+    required this.currency,
+    required this.totalCents,
+  });
+
+  final String orderId;
+  final String orderNumber;
+  final String currency;
+  final int totalCents;
+}
+
 class ShippingOption {
   ShippingOption({
     required this.id,
     required this.label,
     required this.description,
     required this.feeCents,
-    required this.estimatedDays,
-    required this.isActive,
+    this.estimatedDays,
+    this.isActive = true,
+    this.carrier,
+    this.serviceCode,
+    this.rateToken,
+    this.currency = 'JOD',
   });
 
   final String id;
   final String label;
   final String description;
   final int feeCents;
-  final int estimatedDays;
+  final int? estimatedDays;
   final bool isActive;
+  final String? carrier;
+  final String? serviceCode;
+  final String? rateToken;
+  final String currency;
 
   factory ShippingOption.fromMap(Map<String, dynamic> map) {
     return ShippingOption(
@@ -577,8 +599,55 @@ class ShippingOption {
       label: map['label'] as String? ?? 'Shipping',
       description: map['description'] as String? ?? '',
       feeCents: map['fee_cents'] as int? ?? 0,
-      estimatedDays: map['estimated_days'] as int? ?? 3,
+      estimatedDays: map['estimated_days'] as int?,
       isActive: map['is_active'] as bool? ?? true,
+      carrier: map['carrier'] as String?,
+      serviceCode: map['service_code'] as String?,
+      rateToken: map['rate_token'] as String?,
+      currency: map['currency'] as String? ?? 'JOD',
+    );
+  }
+}
+
+class CheckoutQuote {
+  CheckoutQuote({
+    required this.subtotalCents,
+    required this.shippingCents,
+    required this.taxCents,
+    required this.totalCents,
+    required this.currency,
+    required this.shippingOptions,
+    this.selectedRateToken,
+    this.validationStatus,
+  });
+
+  final int subtotalCents;
+  final int shippingCents;
+  final int taxCents;
+  final int totalCents;
+  final String currency;
+  final List<ShippingOption> shippingOptions;
+  final String? selectedRateToken;
+  final String? validationStatus;
+
+  factory CheckoutQuote.fromMap(Map<String, dynamic> map) {
+    final options = (map['shippingOptions'] as List<dynamic>? ?? [])
+        .map(
+          (option) =>
+              ShippingOption.fromMap(Map<String, dynamic>.from(option as Map)),
+        )
+        .toList();
+    return CheckoutQuote(
+      subtotalCents: map['subtotalCents'] as int? ?? 0,
+      shippingCents: map['shippingCents'] as int? ?? 0,
+      taxCents: map['taxCents'] as int? ?? 0,
+      totalCents: map['totalCents'] as int? ?? 0,
+      currency: map['currency'] as String? ?? 'JOD',
+      shippingOptions: options,
+      selectedRateToken: map['selectedRateToken'] as String?,
+      validationStatus: map['address'] is Map
+          ? (map['address'] as Map)['validationStatus'] as String?
+          : map['validationStatus'] as String?,
     );
   }
 }
@@ -608,6 +677,40 @@ class PaymentIntent {
       status: map['status'] as String? ?? 'pending',
       clientSecret: map['client_secret'] as String?,
       provider: map['provider'] as String?,
+    );
+  }
+}
+
+class PaymentSheetIntent {
+  const PaymentSheetIntent({
+    required this.paymentIntentId,
+    required this.clientSecret,
+    required this.customerId,
+    required this.ephemeralKey,
+    required this.amountCents,
+    required this.currency,
+    this.merchantDisplayName,
+  });
+
+  final String paymentIntentId;
+  final String clientSecret;
+  final String customerId;
+  final String ephemeralKey;
+  final int amountCents;
+  final String currency;
+  final String? merchantDisplayName;
+
+  factory PaymentSheetIntent.fromMap(Map<String, dynamic> map) {
+    return PaymentSheetIntent(
+      paymentIntentId: map['paymentIntentId'] as String? ??
+          map['paymentIntentId'.toLowerCase()] as String? ??
+          '',
+      clientSecret: map['clientSecret'] as String,
+      customerId: map['customerId'] as String,
+      ephemeralKey: map['ephemeralKey'] as String,
+      amountCents: map['amountCents'] as int? ?? 0,
+      currency: map['currency'] as String? ?? 'JOD',
+      merchantDisplayName: map['merchantDisplayName'] as String?,
     );
   }
 }

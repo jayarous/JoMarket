@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../seller_models.dart';
 import '../seller_repository.dart';
 
@@ -23,6 +24,9 @@ class _KycManagementScreenState extends State<KycManagementScreen> {
   bool _isLoading = true;
   String? _error;
   VendorKycStatus? _kycStatus;
+  bool _isLoadingConnect = true;
+  String? _connectError;
+  SellerConnectStatus? _connectStatus;
 
   final _taxIdController = TextEditingController();
   String? _businessLicensePath;
@@ -32,6 +36,7 @@ class _KycManagementScreenState extends State<KycManagementScreen> {
   void initState() {
     super.initState();
     _loadKycStatus();
+    _loadConnectStatus();
   }
 
   @override
@@ -60,6 +65,168 @@ class _KycManagementScreenState extends State<KycManagementScreen> {
       setState(() => _error = e.toString());
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _copyOnboardingLink(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Stripe onboarding link copied')),
+    );
+  }
+
+  Widget _buildConnectCard(ThemeData theme) {
+    if (_isLoadingConnect) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_connectError != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Stripe payouts unavailable',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(color: theme.colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+              Text(_connectError!),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: _loadConnectStatus,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final status = _connectStatus;
+    if (status == null) {
+      return const SizedBox.shrink();
+    }
+
+    final chips = <Widget>[
+      Chip(
+        label: Text(
+          status.chargesEnabled ? 'Charges enabled' : 'Charges disabled',
+          style: TextStyle(
+            color: status.chargesEnabled ? Colors.green : Colors.orange,
+          ),
+        ),
+      ),
+      Chip(
+        label: Text(
+          status.payoutsEnabled ? 'Payouts enabled' : 'Payouts disabled',
+          style: TextStyle(
+            color: status.payoutsEnabled ? Colors.green : Colors.orange,
+          ),
+        ),
+      ),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Stripe Connect',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: chips,
+            ),
+            if (status.requirementsDue.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Outstanding requirements:',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...status.requirementsDue.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(item)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (status.onboardingUrl != null) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => _copyOnboardingLink(status.onboardingUrl!),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Continue Stripe Onboarding'),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Copy link and open it in a secure browser to resume verification.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadConnectStatus() async {
+    setState(() {
+      _isLoadingConnect = true;
+      _connectError = null;
+    });
+
+    try {
+      final status = await widget.repository.getStripeConnectStatus(
+        vendorId: widget.vendorId,
+        returnUrl: Uri.parse(
+          'https://app.jomarket.local/vendors/${widget.vendorId}/payouts/complete',
+        ),
+        refreshUrl: Uri.parse(
+          'https://app.jomarket.local/vendors/${widget.vendorId}/payouts/retry',
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _connectStatus = status);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _connectError = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingConnect = false);
+      }
     }
   }
 
@@ -186,6 +353,8 @@ class _KycManagementScreenState extends State<KycManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _buildConnectCard(theme),
+                  const SizedBox(height: 16),
                   // Status card
                   if (_kycStatus != null) ...[
                     Card(

@@ -242,6 +242,9 @@ class VendorShipmentInfo {
     required this.visibility,
     this.trackingNumber,
     this.carrier,
+    this.shippingRateToken,
+    this.labelUrl,
+    this.labelTrackingUrl,
     this.postedAt,
     required this.updatedAt,
     this.address,
@@ -252,6 +255,9 @@ class VendorShipmentInfo {
   final String visibility;
   final String? trackingNumber;
   final String? carrier;
+  final String? shippingRateToken;
+  final String? labelUrl;
+  final String? labelTrackingUrl;
   final DateTime? postedAt;
   final DateTime updatedAt;
   final VendorShipmentAddress? address;
@@ -263,6 +269,9 @@ class VendorShipmentInfo {
       visibility: map['visibility'] as String? ?? 'private',
       trackingNumber: map['tracking_number'] as String?,
       carrier: map['carrier'] as String?,
+      shippingRateToken: map['shipping_rate_token'] as String?,
+      labelUrl: map['label_url'] as String?,
+      labelTrackingUrl: map['label_tracking_url'] as String?,
       postedAt: map['posted_at'] != null
           ? DateTime.tryParse(map['posted_at'] as String)
           : null,
@@ -357,6 +366,37 @@ class VendorShipmentAddress {
       if (country != null) country,
     ].whereType<String>().where((p) => p.trim().isNotEmpty).toList();
     return parts.isEmpty ? 'Address unavailable' : parts.join(', ');
+  }
+}
+
+class SellerConnectStatus {
+  const SellerConnectStatus({
+    required this.accountId,
+    required this.chargesEnabled,
+    required this.payoutsEnabled,
+    required this.detailsSubmitted,
+    required this.requirementsDue,
+    this.onboardingUrl,
+  });
+
+  final String accountId;
+  final bool chargesEnabled;
+  final bool payoutsEnabled;
+  final bool detailsSubmitted;
+  final List<String> requirementsDue;
+  final String? onboardingUrl;
+
+  factory SellerConnectStatus.fromMap(Map<String, dynamic> map) {
+    return SellerConnectStatus(
+      accountId: map['accountId'] as String? ?? '',
+      chargesEnabled: map['chargesEnabled'] as bool? ?? false,
+      payoutsEnabled: map['payoutsEnabled'] as bool? ?? false,
+      detailsSubmitted: map['detailsSubmitted'] as bool? ?? false,
+      requirementsDue: (map['requirementsDue'] as List<dynamic>? ?? [])
+          .map((item) => item.toString())
+          .toList(),
+      onboardingUrl: map['onboardingUrl'] as String?,
+    );
   }
 }
 

@@ -49,6 +49,11 @@ class ShipmentLabelService {
     required VendorOrderDetail order,
     required VendorShipmentInfo shipment,
   }) async {
+    final carrierLabel = await _downloadCarrierLabel(shipment);
+    if (carrierLabel != null) {
+      return carrierLabel;
+    }
+
     final shippingAddress =
         shipment.address?.singleLine ?? 'Address unavailable';
     final trackingValue = _deriveTrackingValue(shipment);
@@ -84,6 +89,47 @@ class ShipmentLabelService {
     final bytes = base64Decode(base64Data);
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
+  Future<File?> _downloadCarrierLabel(VendorShipmentInfo shipment) async {
+    try {
+      final body = {
+        'shipmentId': shipment.id,
+        if (shipment.shippingRateToken != null)
+          'rateToken': shipment.shippingRateToken,
+      };
+      final response = await _client.functions.invoke(
+        'shipping-purchase-label',
+        body: body,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      final labelUrl = data['labelUrl'] as String?;
+      if (labelUrl == null) return null;
+      return _downloadLabelFromUrl(labelUrl: labelUrl, fileName: shipment.id);
+    } catch (error, stackTrace) {
+      debugPrint('Carrier label download failed: $error\n$stackTrace');
+      return null;
+    }
+  }
+
+  Future<File> _downloadLabelFromUrl({
+    required String labelUrl,
+    required String fileName,
+  }) async {
+    final client = HttpClient();
+    final request = await client.getUrl(Uri.parse(labelUrl));
+    final response = await request.close();
+    if (response.statusCode != 200) {
+      throw HttpException(
+        'Failed to download label (${response.statusCode})',
+      );
+    }
+    final bytes = await consolidateHttpClientResponseBytes(response);
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/shipment-$fileName.pdf');
     await file.writeAsBytes(bytes, flush: true);
     return file;
   }
