@@ -354,17 +354,25 @@ async function fetchShippoRates(
   const shipment = await response.json();
   const rates = shipment?.rates ?? [];
 
-  return rates.slice(0, 6).map((rate: any) => ({
-    id: rate.object_id,
-    label: ${rate.provider} .trim(),
-    description: rate.servicelevel?.token ?? undefined,
-    feeCents: Math.round(parseFloat(rate.amount) * 100),
-    currency: rate.currency ?? "JOD",
-    carrier: rate.provider,
-    serviceLevel: rate.servicelevel?.name,
-    serviceCode: rate.servicelevel?.token,
-    estimatedDays: rate.estimated_days ?? null,
-  }));
+  return rates.slice(0, 6).map((rate: any) => {
+    const feeCents = Math.round(parseFloat(rate.amount) * 100);
+    const estimatedDays = rate.estimated_days ?? null;
+    const serviceCode = rate.servicelevel?.token;
+    return {
+      id: rate.object_id,
+      label: `${rate.provider} ${rate.servicelevel?.name ?? ''}`.trim(),
+      description: rate.servicelevel?.token ?? undefined,
+      feeCents,
+      fee_cents: feeCents,
+      currency: rate.currency ?? "JOD",
+      carrier: rate.provider,
+      serviceLevel: rate.servicelevel?.name,
+      serviceCode,
+      service_code: serviceCode,
+      estimatedDays,
+      estimated_days: estimatedDays,
+    };
+  });
 }
 
 function buildParcel(
@@ -410,27 +418,33 @@ function buildFallbackRates(): ShippingOption[] {
       label: "Standard Courier",
       description: "2-3 business days",
       feeCents: 250,
+      fee_cents: 250,
       currency: "JOD",
       carrier: "LocalPost",
       serviceLevel: "express",
+      service_code: "standard",
       estimatedDays: 3,
+      estimated_days: 3,
     },
     {
       id: "express",
       label: "Express Courier",
       description: "Next business day",
       feeCents: 450,
+      fee_cents: 450,
       currency: "JOD",
       carrier: "LocalPost",
       serviceLevel: "overnight",
+      service_code: "express",
       estimatedDays: 1,
+      estimated_days: 1,
     },
   ];
 }
 
 function buildShippoHeaders() {
   return {
-    "Authorization": ShippoToken ,
+    "Authorization": `ShippoToken ${shippoToken}`,
     "Content-Type": "application/json",
   };
 }

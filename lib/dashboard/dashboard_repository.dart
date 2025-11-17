@@ -78,43 +78,9 @@ class DashboardRepository {
   }
 
   Future<List<HomePromo>> _fetchHomePromos() async {
-    try {
-      final response = await _client
-          .from('promos')
-          .select('id,title,subtitle,cta,metadata')
-          .order('position');
-
-      if (response == null) {
-        return const [];
-      }
-
-      return (response as List<dynamic>).map((item) {
-        final map = Map<String, dynamic>.from(item as Map);
-        final metadata = map['metadata'] as Map<String, dynamic>?;
-        final colors = metadata?['colors'] as List<dynamic>?;
-        final primaryColor =
-            metadata?['primary_color'] ??
-            (colors?.isNotEmpty == true ? colors![0] : null);
-        final secondaryColor =
-            metadata?['secondary_color'] ??
-            (colors != null && colors.length > 1 ? colors[1] : null);
-
-        return HomePromo(
-          id: map['id'] as String,
-          title: map['title'] as String? ?? 'Promo',
-          subtitle: map['subtitle'] as String? ?? '',
-          ctaLabel: map['cta'] as String? ?? 'Shop now',
-          ctaAction: metadata?['cta_action'] as String?,
-          primaryColorHex: primaryColor?.toString(),
-          secondaryColorHex: secondaryColor?.toString(),
-          iconName: metadata?['icon'] as String?,
-        );
-      }).toList();
-    } catch (error, stackTrace) {
-      debugPrint('promos query failed: $error');
-      debugPrint(stackTrace.toString());
-      return const [];
-    }
+    // TODO: Implement promos table and query when needed
+    // For now, return empty list to avoid database errors
+    return const [];
   }
 
   Future<List<UserNotification>> getRecentNotifications({
@@ -861,7 +827,8 @@ class DashboardRepository {
         subtotalCents: cart.subtotalCents,
         shippingCents: fallbackOptions.first.feeCents,
         taxCents: (cart.subtotalCents * 0.16).round(),
-        totalCents: cart.subtotalCents +
+        totalCents:
+            cart.subtotalCents +
             fallbackOptions.first.feeCents +
             (cart.subtotalCents * 0.16).round(),
         currency: cart.currency,
@@ -968,10 +935,7 @@ class DashboardRepository {
   }) async {
     await _client.functions.invoke(
       'payments-confirm-intent',
-      body: {
-        'orderId': orderId,
-        'paymentIntentId': paymentIntentId,
-      },
+      body: {'orderId': orderId, 'paymentIntentId': paymentIntentId},
     );
 
     final order = await _client
