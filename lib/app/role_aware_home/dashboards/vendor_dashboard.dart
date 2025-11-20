@@ -94,6 +94,21 @@ class _VendorDashboardState extends State<VendorDashboard> {
               profile: widget.profile,
             ),
             const SizedBox(height: 16),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.local_shipping_outlined),
+                title: const Text('Shipping settings'),
+                subtitle: const Text(
+                  'Configure flat/express rates or enable live carrier rates.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _navigateToShippingSettings(
+                  context,
+                  vendorId: widget.assignment.vendorId!,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             _SectionHeader(
               title: 'Recent products',
               action: Row(
@@ -241,6 +256,22 @@ void _navigateToShipmentEdit(
     MaterialPageRoute<void>(
       builder: (context) =>
           ShipmentEditScreen(vendorId: resolvedVendorId, shipmentId: shipmentId),
+    ),
+  );
+}
+
+void _navigateToShippingSettings(
+  BuildContext context, {
+  String? vendorId,
+}) {
+  final resolvedVendorId = vendorId ??
+      (ModalRoute.of(context)!.settings.arguments as Map?)?['vendorId']
+          as String?;
+  if (resolvedVendorId == null) return;
+
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) => ShippingSettingsScreen(vendorId: resolvedVendorId),
     ),
   );
 }

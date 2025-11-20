@@ -72,8 +72,16 @@ serve(async (req) => {
 
     const order = await fetchOrder(supabaseAdmin, orderId);
     if (!order || order.user_id !== user.id) {
+      console.error("payments-create-intent order lookup failed", {
+        orderId,
+        userId: user.id,
+        orderUserId: order?.user_id,
+      });
       return new Response(
-        JSON.stringify({ error: "Order not found" }),
+        JSON.stringify({
+          error: "Order not found",
+          detail: { orderId, userId: user.id, orderUserId: order?.user_id },
+        }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

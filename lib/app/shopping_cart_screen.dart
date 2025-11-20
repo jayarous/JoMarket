@@ -450,9 +450,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   Widget _buildCartSummary(BuildContext context, Cart cart) {
     final theme = Theme.of(context);
     final subtotal = cart.subtotalCents / 100;
-    final shipping = cart.subtotalCents > 10000
-        ? 0.0
-        : 2.50; // Free shipping over 100 JOD
+    final shipping = 0.0; // Calculated at checkout based on address + vendor rules
     final loyaltyDiscount = _applyLoyaltyCredit
         ? (_loyaltyCreditsCents / 100)
         : 0.0;
@@ -512,37 +510,23 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 Row(
                   children: [
                     Text('Shipping', style: theme.textTheme.bodyMedium),
-                    if (shipping == 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'FREE',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
                 Text(
-                  shipping == 0
-                      ? '${cart.currency} 0.00'
-                      : '${cart.currency} ${shipping.toStringAsFixed(2)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  'Calculated at checkout',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Pick a shipping address to see exact fees in the next step.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
             ),
             if (promoDiscount > 0) ...[
               const SizedBox(height: 8),

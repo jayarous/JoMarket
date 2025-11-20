@@ -86,6 +86,8 @@ Run each table file, then its corresponding policy file (when present). Policies
 39. 39_fix_device_tokens_constraint.sql
 40. 40_promos.sql
    - policies/40_promos_policies.sql
+41. 41_shipping_settings.sql
+   - policies/41_shipping_settings_policies.sql
 
 Notes
 - Many tables reference `auth.users` and use `auth.uid()` inside RLS policies: this is specific to Supabase. Ensure Supabase Auth exists before running.

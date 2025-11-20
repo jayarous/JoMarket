@@ -19,6 +19,7 @@ import 'product_search_screen.dart';
 import 'seller/seller_hub_shell.dart';
 import 'shopping_cart_screen.dart';
 import 'vendor/product_edit_screen.dart';
+import 'vendor/shipping_settings_screen.dart';
 import 'vendor/shipment_edit_screen.dart';
 import 'package:jo_market/app/widgets/profile_avatar.dart';
 import 'package:jo_market/app/widgets/profile_widgets.dart';

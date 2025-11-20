@@ -61,6 +61,16 @@ interface ShippingOption {
   estimatedDays?: number | null;
 }
 
+interface ShippingSettings {
+  vendor_id: string;
+  currency: string;
+  use_live_rates: boolean;
+  flat_rate_cents: number;
+  express_rate_cents: number;
+  free_shipping_threshold_cents: number | null;
+  live_rate_markup_percent: number;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -158,6 +168,12 @@ serve(async (req) => {
 
     const subtotalCents = cartItems.reduce((sum, item) => sum + item.total_cents, 0);
 
+    const vendorId = await fetchVendorIdForCart(supabaseAdmin, cartItems);
+    const shippingSettings = vendorId
+      ? await fetchShippingSettings(supabaseAdmin, vendorId)
+      : null;
+    const useLiveRates = shippoToken && (shippingSettings?.use_live_rates ?? true);
+
     const { normalized, validation } = shippoToken
       ? await validateAddressWithShippo(address, profile)
       : { normalized: address, validation: null };
@@ -178,9 +194,31 @@ serve(async (req) => {
         .eq("id", address.id);
     }
 
-    const shippingOptions = shippoToken
-      ? await fetchShippoRates(normalized, cartItems, dimensionLookup)
-      : buildFallbackRates();
+    const baseShippingOptions = useLiveRates
+      ? await fetchShippoRates(
+        normalized,
+        cartItems,
+        dimensionLookup,
+        shippingSettings?.live_rate_markup_percent ?? 0,
+        shippingSettings?.currency ?? (cartItems[0]?.currency ?? "JOD"),
+      )
+      : buildConfiguredRates(
+        shippingSettings,
+        shippingSettings?.currency ?? (cartItems[0]?.currency ?? "JOD"),
+      );
+
+    const shippingOptionsWithFree = applyFreeShippingThreshold(
+      baseShippingOptions,
+      shippingSettings,
+      subtotalCents,
+    );
+
+    const shippingOptions = shippingOptionsWithFree.length > 0
+      ? shippingOptionsWithFree
+      : buildConfiguredRates(
+        shippingSettings,
+        shippingSettings?.currency ?? (cartItems[0]?.currency ?? "JOD"),
+      );
 
     const selectedShipping = shippingRateToken
       ? shippingOptions.find((option) => option.id === shippingRateToken)
@@ -203,7 +241,7 @@ serve(async (req) => {
       shippingCents,
       taxCents,
       totalCents: subtotalCents + shippingCents + taxCents,
-      currency: cartItems[0].currency ?? "JOD",
+      currency: shippingOptions[0]?.currency ?? cartItems[0].currency ?? "JOD",
       shippingOptions,
       selectedRateToken: selectedShipping?.id ?? null,
       address: {
@@ -247,6 +285,37 @@ async function fetchAddress(client: ReturnType<typeof createClient>, addressId: 
 async function fetchCart(client: ReturnType<typeof createClient>, cartId: string) {
   const { data } = await client.from("carts").select("*").eq("id", cartId).maybeSingle();
   return data as any;
+}
+
+async function fetchVendorIdForCart(
+  client: ReturnType<typeof createClient>,
+  cartItems: CartItemRecord[],
+) {
+  const productIds = cartItems.map((item) => item.product_id);
+  if (productIds.length === 0) return null;
+  const uniqueIds = Array.from(new Set(productIds));
+  const { data } = await client
+    .from("products")
+    .select("vendor_id")
+    .in("id", uniqueIds)
+    .limit(1);
+  if (!data || data.length === 0) return null;
+  const vendorId = (data[0] as any)?.vendor_id as string | null;
+  return vendorId;
+}
+
+async function fetchShippingSettings(
+  client: ReturnType<typeof createClient>,
+  vendorId: string,
+): Promise<ShippingSettings | null> {
+  const { data } = await client
+    .from("shipping_settings")
+    .select(
+      "vendor_id,currency,use_live_rates,flat_rate_cents,express_rate_cents,free_shipping_threshold_cents,live_rate_markup_percent",
+    )
+    .eq("vendor_id", vendorId)
+    .maybeSingle();
+  return (data as ShippingSettings | null) ?? null;
 }
 
 async function fetchProfile(client: ReturnType<typeof createClient>, userId: string) {
@@ -322,6 +391,8 @@ async function fetchShippoRates(
   address: any,
   cartItems: CartItemRecord[],
   dimensionLookup: Map<string, ProductDimension>,
+  markupPercent: number,
+  currencyFallback: string,
 ): Promise<ShippingOption[]> {
   const parcel = buildParcel(cartItems, dimensionLookup);
   const shipmentPayload = {
@@ -348,14 +419,15 @@ async function fetchShippoRates(
   if (!response.ok) {
     const text = await response.text();
     console.error("Shippo shipment error", text);
-    return buildFallbackRates();
+    return buildConfiguredRates(undefined, currencyFallback);
   }
 
   const shipment = await response.json();
   const rates = shipment?.rates ?? [];
 
   return rates.slice(0, 6).map((rate: any) => {
-    const feeCents = Math.round(parseFloat(rate.amount) * 100);
+    const baseCents = Math.round(parseFloat(rate.amount) * 100);
+    const feeCents = applyMarkup(baseCents, markupPercent);
     const estimatedDays = rate.estimated_days ?? null;
     const serviceCode = rate.servicelevel?.token;
     return {
@@ -411,15 +483,21 @@ function buildParcel(
   };
 }
 
-function buildFallbackRates(): ShippingOption[] {
+function buildConfiguredRates(
+  settings?: ShippingSettings | null,
+  currency?: string,
+): ShippingOption[] {
+  const currencyCode = currency ?? settings?.currency ?? "JOD";
+  const standardCents = settings?.flat_rate_cents ?? 250;
+  const expressCents = settings?.express_rate_cents ?? 450;
   return [
     {
       id: "standard",
       label: "Standard Courier",
       description: "2-3 business days",
-      feeCents: 250,
-      fee_cents: 250,
-      currency: "JOD",
+      feeCents: standardCents,
+      fee_cents: standardCents,
+      currency: currencyCode,
       carrier: "LocalPost",
       serviceLevel: "express",
       service_code: "standard",
@@ -430,9 +508,9 @@ function buildFallbackRates(): ShippingOption[] {
       id: "express",
       label: "Express Courier",
       description: "Next business day",
-      feeCents: 450,
-      fee_cents: 450,
-      currency: "JOD",
+      feeCents: expressCents,
+      fee_cents: expressCents,
+      currency: currencyCode,
       carrier: "LocalPost",
       serviceLevel: "overnight",
       service_code: "express",
@@ -440,6 +518,41 @@ function buildFallbackRates(): ShippingOption[] {
       estimated_days: 1,
     },
   ];
+}
+
+function applyFreeShippingThreshold(
+  options: ShippingOption[],
+  settings: ShippingSettings | null,
+  subtotalCents: number,
+): ShippingOption[] {
+  if (settings?.free_shipping_threshold_cents == null) {
+    return options;
+  }
+  if (subtotalCents < settings.free_shipping_threshold_cents) {
+    return options;
+  }
+  const currency = options[0]?.currency ?? "JOD";
+  const freeOption: ShippingOption = {
+    id: "free",
+    label: "Free Shipping",
+    description: "Below rates remain available if needed",
+    feeCents: 0,
+    fee_cents: 0,
+    currency,
+    carrier: options[0]?.carrier,
+    serviceLevel: options[0]?.serviceLevel,
+    estimatedDays: options[0]?.estimatedDays,
+    estimated_days: options[0] && "estimated_days" in options[0]
+      ? (options[0] as any).estimated_days
+      : options[0]?.estimatedDays,
+  };
+  return [freeOption, ...options];
+}
+
+function applyMarkup(amountCents: number, percent: number) {
+  if (!percent) return amountCents;
+  const multiplier = 1 + percent / 100;
+  return Math.max(0, Math.round(amountCents * multiplier));
 }
 
 function buildShippoHeaders() {
