@@ -67,6 +67,25 @@ Run each table file, then its corresponding policy file (when present). Policies
 22. 22_user_roles.sql
 23. 23_profiles.sql
 24. 24_triggers_and_rls.sql
+25. 25_post_fixes.sql
+   - policies/? (check if exists)
+26. 26_vendor_financials.sql
+27. 27_shipping_and_tax_config.sql
+28. 28_delivery_logistics_extensions.sql
+28. 28_returns_and_rma.sql
+29. 29_coupon_enhancements.sql
+30. 30_product_data_extensions.sql
+31. 31_payments_extensions.sql
+32. 32_order_integrity.sql
+33. 33_inventory_unification.sql
+34. 34_review_enhancements.sql
+35. 35_moderation_system.sql
+36. 36_notification_preferences.sql
+37. 37_delivery_media_storage.sql
+38. 38_payments_connect_shipping.sql
+39. 39_fix_device_tokens_constraint.sql
+40. 40_promos.sql
+   - policies/40_promos_policies.sql
 
 Notes
 - Many tables reference `auth.users` and use `auth.uid()` inside RLS policies: this is specific to Supabase. Ensure Supabase Auth exists before running.

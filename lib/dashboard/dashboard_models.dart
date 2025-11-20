@@ -3,17 +3,20 @@ class CategorySummary {
     required this.id,
     required this.name,
     required this.position,
+    this.parentId,
   });
 
   final String id;
   final String name;
   final int position;
+  final String? parentId;
 
   factory CategorySummary.fromMap(Map<String, dynamic> map) {
     return CategorySummary(
       id: map['id'] as String,
       name: map['name'] as String? ?? 'Unnamed',
       position: map['position'] as int? ?? 0,
+      parentId: map['parent_id'] as String?,
     );
   }
 }
@@ -701,13 +704,27 @@ class PaymentSheetIntent {
   final String? merchantDisplayName;
 
   factory PaymentSheetIntent.fromMap(Map<String, dynamic> map) {
+    final paymentIntentId = map['paymentIntentId'] ??
+        map['payment_intent_id'] ??
+        map['paymentIntentId'.toLowerCase()];
+    final clientSecret = map['clientSecret'] ?? map['client_secret'];
+    final customerId = map['customerId'] ?? map['customer_id'];
+    final ephemeralKey = map['ephemeralKey'] ?? map['ephemeral_key'];
+
+    if (clientSecret == null ||
+        customerId == null ||
+        ephemeralKey == null ||
+        paymentIntentId == null) {
+      throw StateError(
+        'Invalid payment sheet response from server: missing required fields',
+      );
+    }
+
     return PaymentSheetIntent(
-      paymentIntentId: map['paymentIntentId'] as String? ??
-          map['paymentIntentId'.toLowerCase()] as String? ??
-          '',
-      clientSecret: map['clientSecret'] as String,
-      customerId: map['customerId'] as String,
-      ephemeralKey: map['ephemeralKey'] as String,
+      paymentIntentId: paymentIntentId as String,
+      clientSecret: clientSecret as String,
+      customerId: customerId as String,
+      ephemeralKey: ephemeralKey as String,
       amountCents: map['amountCents'] as int? ?? 0,
       currency: map['currency'] as String? ?? 'JOD',
       merchantDisplayName: map['merchantDisplayName'] as String?,

@@ -78,9 +78,18 @@ class DashboardRepository {
   }
 
   Future<List<HomePromo>> _fetchHomePromos() async {
-    // TODO: Implement promos table and query when needed
-    // For now, return empty list to avoid database errors
-    return const [];
+    final response = await _client
+        .from('promos')
+        .select(
+          'id,title,subtitle,cta_label,cta_action,primary_color,secondary_color,icon_name',
+        )
+        .eq('is_active', true)
+        .order('sort_order')
+        .limit(10); // Limit for home screen
+
+    return (response as List<dynamic>)
+        .map((item) => HomePromo.fromMap(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<UserNotification>> getRecentNotifications({
@@ -923,8 +932,18 @@ class DashboardRepository {
     );
 
     final data = response.data;
+    if (response.status != null && response.status! >= 400) {
+      final message = data is Map<String, dynamic> ? data['error'] : null;
+      throw StateError(
+        'payments-create-intent failed: ${message ?? 'HTTP ${response.status}'}',
+      );
+    }
     if (data is Map<String, dynamic>) {
-      return PaymentSheetIntent.fromMap(data);
+      final errorMessage = data['error'] as String?;
+      if (errorMessage != null && errorMessage.isNotEmpty) {
+        throw StateError('payments-create-intent failed: $errorMessage');
+      }
+      return PaymentSheetIntent.fromMap(Map<String, dynamic>.from(data));
     }
     throw StateError('payments-create-intent returned no data');
   }
@@ -933,10 +952,24 @@ class DashboardRepository {
     required String orderId,
     required String paymentIntentId,
   }) async {
-    await _client.functions.invoke(
+    final response = await _client.functions.invoke(
       'payments-confirm-intent',
       body: {'orderId': orderId, 'paymentIntentId': paymentIntentId},
     );
+
+    final data = response.data;
+    if (response.status != null && response.status! >= 400) {
+      final message = data is Map<String, dynamic> ? data['error'] : null;
+      throw StateError(
+        'payments-confirm-intent failed: ${message ?? 'HTTP ${response.status}'}',
+      );
+    }
+    if (data is Map<String, dynamic>) {
+      final errorMessage = data['error'] as String?;
+      if (errorMessage != null && errorMessage.isNotEmpty) {
+        throw StateError('payments-confirm-intent failed: $errorMessage');
+      }
+    }
 
     final order = await _client
         .from('orders')

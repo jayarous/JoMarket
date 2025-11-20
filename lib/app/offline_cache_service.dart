@@ -130,7 +130,12 @@ class OfflineCacheService {
 
     final categoriesJson = categories
         .map(
-          (cat) => {'id': cat.id, 'name': cat.name, 'position': cat.position},
+          (cat) => {
+            'id': cat.id,
+            'name': cat.name,
+            'position': cat.position,
+            'parent_id': cat.parentId,
+          },
         )
         .toList();
 

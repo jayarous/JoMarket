@@ -102,7 +102,11 @@ class _VendorDashboardState extends State<VendorDashboard> {
                   IconButton(
                     tooltip: 'Add Product',
                     icon: const Icon(Icons.add),
-                    onPressed: () => _navigateToProductEdit(context, null),
+                    onPressed: () => _navigateToProductEdit(
+                      context,
+                      null,
+                      vendorId: widget.assignment.vendorId!,
+                    ),
                   ),
                   IconButton(
                     tooltip: 'Reload',
@@ -131,7 +135,11 @@ class _VendorDashboardState extends State<VendorDashboard> {
                       product.id,
                     );
                     if (context.mounted) {
-                      _navigateToProductEdit(context, detail);
+                      _navigateToProductEdit(
+                        context,
+                        detail,
+                        vendorId: widget.assignment.vendorId!,
+                      );
                     }
                   },
                 ),
@@ -156,7 +164,11 @@ class _VendorDashboardState extends State<VendorDashboard> {
                     'Updated ${_timeAgo(shipment.updatedAt)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  onTap: () => _navigateToShipmentEdit(context, shipment.id),
+                  onTap: () => _navigateToShipmentEdit(
+                    context,
+                    shipment.id,
+                    vendorId: widget.assignment.vendorId!,
+                  ),
                 ),
               ),
           ],
@@ -188,17 +200,21 @@ class _VendorIntro extends StatelessWidget {
   }
 }
 
-void _navigateToProductEdit(BuildContext context, ProductDetail? product) {
-  final vendorId =
+void _navigateToProductEdit(
+  BuildContext context,
+  ProductDetail? product, {
+  String? vendorId,
+}) {
+  final resolvedVendorId = vendorId ??
       (ModalRoute.of(context)!.settings.arguments as Map?)?['vendorId']
           as String?;
-  if (vendorId == null) return;
+  if (resolvedVendorId == null) return;
 
   Navigator.of(context)
       .push(
         MaterialPageRoute<bool>(
           builder: (context) =>
-              ProductEditScreen(vendorId: vendorId, product: product),
+              ProductEditScreen(vendorId: resolvedVendorId, product: product),
         ),
       )
       .then((changed) {
@@ -211,16 +227,20 @@ void _navigateToProductEdit(BuildContext context, ProductDetail? product) {
       });
 }
 
-void _navigateToShipmentEdit(BuildContext context, String shipmentId) {
-  final vendorId =
+void _navigateToShipmentEdit(
+  BuildContext context,
+  String shipmentId, {
+  String? vendorId,
+}) {
+  final resolvedVendorId = vendorId ??
       (ModalRoute.of(context)!.settings.arguments as Map?)?['vendorId']
           as String?;
-  if (vendorId == null) return;
+  if (resolvedVendorId == null) return;
 
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) =>
-          ShipmentEditScreen(vendorId: vendorId, shipmentId: shipmentId),
+          ShipmentEditScreen(vendorId: resolvedVendorId, shipmentId: shipmentId),
     ),
   );
 }

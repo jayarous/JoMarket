@@ -44,14 +44,25 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     try {
       final response = await Supabase.instance.client
           .from('categories')
-          .select('id,name,position')
+          .select('id,name,position,parent_id')
           .order('position');
+      final categories = (response as List)
+          .map(
+            (item) => CategorySummary.fromMap(item as Map<String, dynamic>),
+          )
+          .toList();
+      final parentIds = categories
+          .map((cat) => cat.parentId)
+          .whereType<String>()
+          .toSet();
+      final leafCategories =
+          categories.where((cat) => !parentIds.contains(cat.id)).toList();
       setState(() {
-        _categories = (response as List)
-            .map(
-              (item) => CategorySummary.fromMap(item as Map<String, dynamic>),
-            )
-            .toList();
+        _categories = leafCategories;
+        if (_categoryId != null &&
+            !_categories.any((cat) => cat.id == _categoryId)) {
+          _categoryId = null;
+        }
       });
     } catch (e) {
       if (mounted) {
