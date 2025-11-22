@@ -2116,8 +2116,14 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                         const SizedBox(height: 24),
                         _CategoryFilter(
                           categories: data.categories,
+                          selectedCategoryId: _activeFilterIndex == 0
+                              ? null
+                              : data.categories[_activeFilterIndex - 1].id,
                           onCategorySelected: (categoryId) {
-                            // Handle category selection
+                            setState(() {
+                              _activeFilterIndex =
+                                  _indexForCategory(categoryId, data.categories);
+                            });
                           },
                         ),
                         const SizedBox(height: 24),
@@ -2168,38 +2174,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                             });
                           },
                         ),
-                        const SizedBox(height: 12),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: List.generate(
-                              data.categories.length + 1,
-                              (index) {
-                                final isSelected = index == _activeFilterIndex;
-                                final label = index == 0
-                                    ? 'All'
-                                    : data.categories[index - 1].name;
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    right: index == data.categories.length
-                                        ? 0
-                                        : 8,
-                                  ),
-                                  child: ChoiceChip(
-                                    label: Text(label),
-                                    selected: isSelected,
-                                    onSelected: (_) {
-                                      setState(
-                                        () => _activeFilterIndex = index,
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
+
                         const SizedBox(height: 12),
                         if (data.featuredProducts.isEmpty)
                           const _EmptyState(
@@ -2316,21 +2291,16 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   }
 }
 
-class _CategoryFilter extends StatefulWidget {
+class _CategoryFilter extends StatelessWidget {
   const _CategoryFilter({
     required this.categories,
+    required this.selectedCategoryId,
     required this.onCategorySelected,
   });
 
   final List<CategorySummary> categories;
+  final String? selectedCategoryId;
   final ValueChanged<String?> onCategorySelected;
-
-  @override
-  State<_CategoryFilter> createState() => _CategoryFilterState();
-}
-
-class _CategoryFilterState extends State<_CategoryFilter> {
-  String? _selectedCategoryId;
 
   // Map category names to icons
   IconData _getCategoryIcon(String categoryName) {
@@ -2372,13 +2342,13 @@ class _CategoryFilterState extends State<_CategoryFilter> {
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: widget.categories.length + 1, // +1 for "All"
+            itemCount: categories.length + 1, // +1 for "All"
             itemBuilder: (context, index) {
               final isAll = index == 0;
-              final category = isAll ? null : widget.categories[index - 1];
+              final category = isAll ? null : categories[index - 1];
               final isSelected = isAll
-                  ? _selectedCategoryId == null
-                  : _selectedCategoryId == category?.id;
+                  ? selectedCategoryId == null
+                  : selectedCategoryId == category?.id;
 
               return Padding(
                 padding: const EdgeInsets.only(right: 16),
@@ -2388,12 +2358,7 @@ class _CategoryFilterState extends State<_CategoryFilter> {
                       ? Icons.grid_view
                       : _getCategoryIcon(category!.name),
                   isSelected: isSelected,
-                  onTap: () {
-                    setState(() {
-                      _selectedCategoryId = category?.id;
-                    });
-                    widget.onCategorySelected(category?.id);
-                  },
+                  onTap: () => onCategorySelected(category?.id),
                 ),
               );
             },

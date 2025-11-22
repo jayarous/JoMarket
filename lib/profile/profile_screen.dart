@@ -90,11 +90,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _selectRole(RoleAssignment role) {
-    if (_selectedRoleId == role.id) return;
-    setState(() {
-      _selectedRoleId = role.id;
-    });
-    widget.onRoleChanged?.call(role);
+    if (_selectedRoleId != role.id) {
+      setState(() {
+        _selectedRoleId = role.id;
+      });
+      widget.onRoleChanged?.call(role);
+    }
+    
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   IconData _roleIcon(AppUserRole role) {
@@ -272,6 +277,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
+                          onTap: () => _selectRole(role),
                         ),
                       )
                       .toList(),

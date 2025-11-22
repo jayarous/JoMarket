@@ -179,113 +179,220 @@ class _DeliveryJobScreenState extends State<DeliveryJobScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Delivery ${widget.shipmentId.substring(0, 8)}'),
+        elevation: 0,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Error: $_error'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _loadShipment,
-                    child: const Text('Retry'),
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Error: $_error'),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadShipment,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )
-          : _shipment == null
-          ? const Center(child: Text('Shipment not found'))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                )
+              : _shipment == null
+                  ? const Center(child: Text('Shipment not found'))
+                  : Column(
                       children: [
-                        Text(
-                          'Shipment Details',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 16),
-                        _DetailRow(label: 'Status', value: _shipment!.status),
-                        if (_shipment!.orderId != null)
-                          _DetailRow(
-                            label: 'Order ID',
-                            value: _shipment!.orderId!.substring(0, 8),
+                        _buildStatusBanner(context),
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.all(16),
+                            children: [
+                              _buildDetailsCard(context),
+                              const SizedBox(height: 24),
+                              if (_shipment!.acceptedByStaffId == null)
+                                _buildAcceptButton(context)
+                              else if (_shipment!.acceptedByStaffId == widget.staffId &&
+                                  _shipment!.status != 'delivered') ...[
+                                _buildActionButtons(context),
+                              ] else if (_shipment!.status == 'delivered')
+                                _buildCompletedState(context),
+                            ],
                           ),
-                        if (_shipment!.trackingNumber != null)
-                          _DetailRow(
-                            label: 'Tracking',
-                            value: _shipment!.trackingNumber!,
-                          ),
-                        if (_shipment!.carrier != null)
-                          _DetailRow(
-                            label: 'Carrier',
-                            value: _shipment!.carrier!,
-                          ),
-                        _DetailRow(
-                          label: 'Updated',
-                          value: _formatDateTime(_shipment!.updatedAt),
                         ),
                       ],
                     ),
+    );
+  }
+
+  Widget _buildStatusBanner(BuildContext context) {
+    final color = _getStatusColor(_shipment!.status);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      color: color.withAlpha(26),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: color),
+          const SizedBox(width: 12),
+          Text(
+            'Status: ${_shipment!.status.toUpperCase()}',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsCard(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Shipment Details',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 24),
+            _DetailRow(
+              label: 'Order ID',
+              value: _shipment!.orderId?.substring(0, 8) ?? 'N/A',
+              icon: Icons.receipt_long,
+            ),
+            const Divider(height: 24),
+            _DetailRow(
+              label: 'Tracking',
+              value: _shipment!.trackingNumber ?? 'Not assigned',
+              icon: Icons.qr_code,
+            ),
+            const Divider(height: 24),
+            _DetailRow(
+              label: 'Carrier',
+              value: _shipment!.carrier ?? 'Standard',
+              icon: Icons.local_shipping,
+            ),
+            const Divider(height: 24),
+            _DetailRow(
+              label: 'Last Update',
+              value: _formatDateTime(_shipment!.updatedAt),
+              icon: Icons.access_time,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcceptButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: FilledButton.icon(
+        onPressed: _acceptJob,
+        icon: const Icon(Icons.check_circle_outline),
+        label: const Text('ACCEPT JOB', style: TextStyle(fontSize: 16)),
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: FilledButton.icon(
+            onPressed: _completeJob,
+            icon: const Icon(Icons.camera_alt),
+            label: const Text('CAPTURE PROOF OF DELIVERY', style: TextStyle(fontSize: 16)),
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: OutlinedButton.icon(
+            onPressed: _reportIssue,
+            icon: const Icon(Icons.report_problem_outlined),
+            label: const Text('REPORT ISSUE', style: TextStyle(fontSize: 16)),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              side: BorderSide(color: Theme.of(context).colorScheme.error),
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompletedState(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green.shade700, size: 32),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Delivery Completed',
+                  style: TextStyle(
+                    color: Colors.green.shade900,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (_shipment!.acceptedByStaffId == null)
-                  ElevatedButton.icon(
-                    onPressed: _acceptJob,
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Accept Job'),
-                  )
-                else if (_shipment!.acceptedByStaffId == widget.staffId &&
-                    _shipment!.status != 'delivered') ...[
-                  ElevatedButton.icon(
-                    onPressed: _completeJob,
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Capture Proof of Delivery'),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _reportIssue,
-                    icon: const Icon(Icons.report_problem_outlined),
-                    label: const Text('Report Issue'),
-                  ),
-                ] else if (_shipment!.status == 'delivered')
-                  Card(
-                    color: Colors.green.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.check_circle,
-                            color: Colors.green.shade700,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Delivery completed',
-                              style: TextStyle(
-                                color: Colors.green.shade900,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                Text(
+                  'Great job! This shipment is closed.',
+                  style: TextStyle(color: Colors.green.shade700),
+                ),
               ],
             ),
+          ),
+        ],
+      ),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'assigned':
+        return Colors.blue;
+      case 'picked_up':
+        return Colors.indigo;
+      case 'delivered':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   String _formatDateTime(DateTime dt) {
@@ -339,32 +446,50 @@ class ShipmentDetail {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+  const _DetailRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   final String label;
   final String value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
           ),
-          Expanded(
-            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
+          child: Icon(icon, size: 20, color: Colors.grey[700]),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
