@@ -52,3 +52,5 @@ app.*.map.json
 
 # Ignore generated migration run output logs
 migrations/split/run_output*.txt
+
+sentry.properties

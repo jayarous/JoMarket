@@ -130,6 +130,7 @@ class _RoleDashboardState extends State<RoleDashboard> {
           userEmail: widget.session?.user.email,
         ),
       ),
+      // No floating debug button in release UI.
     );
   }
 }

@@ -53,6 +53,10 @@ class _AuthFormState extends State<AuthForm> {
     try {
       if (_mode == _AuthMode.signIn) {
         await auth.signInWithPassword(email: email, password: password);
+        if (!mounted) return;
+        // Close the AuthForm after successful sign-in so callers (like
+        // the cart flow) can continue and observe the signed-in session.
+        Navigator.of(context).pop();
       } else {
         final response = await auth.signUp(email: email, password: password);
 
@@ -109,20 +113,23 @@ class _AuthFormState extends State<AuthForm> {
       if (kIsWeb || forceBrowserOAuth) {
         await _launchSupabaseOAuth(
           auth,
-          kIsWeb ? '${Uri.base.origin}/auth-callback' : 'com.jomarket.app://auth-callback',
+          kIsWeb
+              ? '${Uri.base.origin}/auth-callback'
+              : 'com.jomarket.app://auth-callback',
         );
+        if (!mounted) return;
+        Navigator.of(context).pop();
         return;
       }
 
       try {
         await _signInWithGoogleNative(auth);
+        if (!mounted) return;
+        Navigator.of(context).pop();
         return;
       } on PlatformException catch (error) {
         if (_shouldFallbackToBrowserFlow(error)) {
-          await _launchSupabaseOAuth(
-            auth,
-            'com.jomarket.app://auth-callback',
-          );
+          await _launchSupabaseOAuth(auth, 'com.jomarket.app://auth-callback');
           return;
         }
         rethrow;
@@ -192,7 +199,8 @@ class _AuthFormState extends State<AuthForm> {
     final clientId = _resolveGoogleServerClientId();
     if (clientId.isEmpty) {
       setState(() {
-        _errorMessage = 'GOOGLE_SERVER_CLIENT_ID is missing. '
+        _errorMessage =
+            'GOOGLE_SERVER_CLIENT_ID is missing. '
             'Add it to your .env or pass it via --dart-define.';
       });
       throw Exception('Missing GOOGLE_SERVER_CLIENT_ID.');
@@ -241,14 +249,8 @@ class _AuthFormState extends State<AuthForm> {
         message.contains('apiexception: 7');
   }
 
-  Future<void> _launchSupabaseOAuth(
-    GoTrueClient auth,
-    String redirectTo,
-  ) {
-    return auth.signInWithOAuth(
-      Provider.google,
-      redirectTo: redirectTo,
-    );
+  Future<void> _launchSupabaseOAuth(GoTrueClient auth, String redirectTo) {
+    return auth.signInWithOAuth(Provider.google, redirectTo: redirectTo);
   }
 
   Future<void> _continueAsGuest() async {

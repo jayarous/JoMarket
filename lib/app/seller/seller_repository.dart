@@ -5,8 +5,7 @@ import 'seller_models.dart';
 
 /// Repository for seller/vendor operations
 class SellerRepository {
-  SellerRepository(this._client)
-      : _deliveryService = DeliveryService(_client);
+  SellerRepository(this._client) : _deliveryService = DeliveryService(_client);
 
   final SupabaseClient _client;
   final DeliveryService _deliveryService;
@@ -500,6 +499,33 @@ class SellerRepository {
     );
   }
 
+  SupportTicketDetail _mapSupportTicket(Map<String, dynamic> item) {
+    final order = item['orders'] as Map<String, dynamic>?;
+
+    return SupportTicketDetail(
+      id: item['id'] as String,
+      userId: item['user_id'] as String?,
+      vendorId: item['vendor_id'] as String,
+      orderId: item['order_id'] as String?,
+      subject: item['subject'] as String? ?? '',
+      status: item['status'] as String? ?? 'open',
+      priority: item['priority'] as String? ?? 'medium',
+      assignedToUserId: item['assigned_to_user_id'] as String?,
+      createdAt: DateTime.parse(item['created_at'] as String),
+      updatedAt: DateTime.parse(item['updated_at'] as String),
+      orderNumber: order?['order_number'] as String?,
+      customerName: item['customer_name'] as String?,
+      customerPhone: item['customer_phone'] as String?,
+      escalated: item['escalated'] as bool? ?? false,
+      escalationReason: item['escalation_reason'] as String?,
+      escalatedAt: item['escalated_at'] != null
+          ? DateTime.parse(item['escalated_at'] as String)
+          : null,
+      moderationResolution: item['moderation_resolution'] as String?,
+      resolvedByAdmin: item['resolved_by_admin'] as String?,
+    );
+  }
+
   /// Get support tickets for vendor
   Future<List<SupportTicketDetail>> getSupportTickets(
     String vendorId, {
@@ -508,21 +534,25 @@ class SellerRepository {
     var query = _client
         .from('support_tickets')
         .select('''
-          id,
-          user_id,
-          vendor_id,
-          order_id,
-          subject,
-          status,
-          priority,
-          assigned_to_user_id,
-          created_at,
-          updated_at,
-          escalated,
-          escalation_reason,
-          escalated_at,
-          orders(order_number)
-        ''')
+           id,
+           user_id,
+           vendor_id,
+           order_id,
+           subject,
+           status,
+           priority,
+           assigned_to_user_id,
+           created_at,
+           updated_at,
+           escalated,
+           escalation_reason,
+           escalated_at,
+           moderation_resolution,
+           resolved_by_admin,
+           customer_name,
+           customer_phone,
+           orders(order_number)
+         ''')
         .eq('vendor_id', vendorId);
 
     if (status != null && status != 'all') {
@@ -531,30 +561,40 @@ class SellerRepository {
 
     final response = await query.order('created_at', ascending: false);
 
-    return (response as List).map((item) {
-      final order = item['orders'] as Map<String, dynamic>?;
+    return (response as List)
+        .map((item) => _mapSupportTicket(item as Map<String, dynamic>))
+        .toList();
+  }
 
-      return SupportTicketDetail(
-        id: item['id'] as String,
-        userId: item['user_id'] as String?,
-        vendorId: item['vendor_id'] as String,
-        orderId: item['order_id'] as String?,
-        subject: item['subject'] as String? ?? '',
-        status: item['status'] as String? ?? 'open',
-        priority: item['priority'] as String? ?? 'medium',
-        assignedToUserId: item['assigned_to_user_id'] as String?,
-        createdAt: DateTime.parse(item['created_at'] as String),
-        updatedAt: DateTime.parse(item['updated_at'] as String),
-        orderNumber: order?['order_number'] as String?,
-        escalated: item['escalated'] as bool? ?? false,
-        escalationReason: item['escalation_reason'] as String?,
-        escalatedAt: item['escalated_at'] != null
-            ? DateTime.parse(item['escalated_at'] as String)
-            : null,
-        moderationResolution: item['moderation_resolution'] as String?,
-        resolvedByAdmin: item['resolved_by_admin'] as String?,
-      );
-    }).toList();
+  /// Get a single support ticket with customer details
+  Future<SupportTicketDetail?> getSupportTicket(String ticketId) async {
+    final response = await _client
+        .from('support_tickets')
+        .select('''
+           id,
+           user_id,
+           vendor_id,
+           order_id,
+           subject,
+           status,
+           priority,
+           assigned_to_user_id,
+           created_at,
+           updated_at,
+           escalated,
+           escalation_reason,
+           escalated_at,
+           moderation_resolution,
+           resolved_by_admin,
+           customer_name,
+           customer_phone,
+           orders(order_number)
+         ''')
+        .eq('id', ticketId)
+        .maybeSingle();
+
+    if (response == null) return null;
+    return _mapSupportTicket(response);
   }
 
   /// Get support ticket statistics
@@ -596,6 +636,51 @@ class SellerRepository {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', ticketId);
+  }
+
+  /// Get messages for a support_ticket conversation
+  Future<List<SupportTicketMessage>> getTicketMessages(String ticketId) async {
+    final response = await _client
+        .from('ticket_messages')
+        .select('''
+          id,
+          ticket_id,
+          user_id,
+          body,
+          attachments,
+          channel,
+          metadata,
+          created_at
+        ''')
+        .eq('ticket_id', ticketId)
+        .order('created_at', ascending: true);
+
+    return (response as List)
+        .map(
+          (item) => SupportTicketMessage.fromMap(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  /// Send a message to the support ticket thread
+  Future<void> sendTicketMessage({
+    required String ticketId,
+    required String vendorId,
+    required String body,
+    List<String>? attachments,
+    String channel = 'in_app',
+    Map<String, dynamic>? metadata,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    await _client.from('ticket_messages').insert({
+      'ticket_id': ticketId,
+      'vendor_id': vendorId,
+      'user_id': userId,
+      'body': body,
+      'attachments': attachments ?? <String>[],
+      'channel': channel,
+      'metadata': metadata ?? <String, dynamic>{},
+    });
   }
 
   /// Get analytics data for vendor
@@ -827,9 +912,7 @@ class SellerRepository {
 
     final data = response.data;
     if (data is Map<String, dynamic>) {
-      return SellerConnectStatus.fromMap(
-        Map<String, dynamic>.from(data),
-      );
+      return SellerConnectStatus.fromMap(Map<String, dynamic>.from(data));
     }
 
     throw StateError('vendor-stripe-connect returned no data');

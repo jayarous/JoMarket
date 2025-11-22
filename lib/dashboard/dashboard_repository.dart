@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/offline_cache_service.dart';
 import 'dashboard_models.dart';
@@ -448,8 +449,21 @@ class DashboardRepository {
         r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
     final isUuid = RegExp(uuidPattern).hasMatch(userId);
     if (!isUuid || userId.toLowerCase() == 'guest') {
+      // Attempt to return a locally cached guest cart first so that guest
+      // users see items they previously added while offline or in the same
+      // session. Fall back to an ephemeral empty cart if no cache exists.
+      try {
+        final cached = await _cacheService.getCachedCart(userId);
+        if (cached != null) {
+          debugPrint('getOrCreateCart: returning cached cart for $userId');
+          return cached;
+        }
+      } catch (e) {
+        debugPrint('getOrCreateCart: failed to read cached cart: $e');
+      }
+
       debugPrint(
-        'getOrCreateCart: non-UUID user "$userId" -> returning ephemeral cart',
+        'getOrCreateCart: non-UUID user $userId -> returning ephemeral cart',
       );
       return Cart(
         id: 'guest-local',
@@ -609,8 +623,57 @@ class DashboardRepository {
     required String currency,
   }) async {
     final cart = await getOrCreateCart(userId);
+    // If cart is ephemeral (guest/local), persist to local cache instead
+    if (cart.id == 'guest-local') {
+      // Work with an in-memory copy of items
+      final items = List<CartItem>.from(cart.items);
 
-    // Check if item already exists
+      // Try to find existing item matching product + variant
+      final idx = items.indexWhere(
+        (i) =>
+            i.productId == productId &&
+            (i.variantId ?? '') == (variantId ?? ''),
+      );
+
+      if (idx >= 0) {
+        final existing = items[idx];
+        final updated = existing.copyWith(
+          quantity: existing.quantity + quantity,
+          totalCents: (existing.quantity + quantity) * existing.unitPriceCents,
+        );
+        items[idx] = updated;
+      } else {
+        final newItemId = 'guest-${DateTime.now().millisecondsSinceEpoch}';
+        final newItem = CartItem(
+          id: newItemId,
+          cartId: cart.id,
+          productId: productId,
+          variantId: variantId,
+          vendorId: null,
+          quantity: quantity,
+          unitPriceCents: unitPriceCents,
+          currency: currency,
+          totalCents: quantity * unitPriceCents,
+          createdAt: DateTime.now(),
+          productName: productId,
+        );
+        items.insert(0, newItem);
+      }
+
+      final updatedCart = Cart(
+        id: cart.id,
+        userId: cart.userId,
+        status: cart.status,
+        items: items,
+        createdAt: cart.createdAt,
+        updatedAt: DateTime.now(),
+      );
+
+      await _cacheService.cacheCart(userId, updatedCart);
+      return;
+    }
+
+    // Check if item already exists in remote cart
     final existingItem = await _client
         .from('cart_items')
         .select('id,quantity')
@@ -657,6 +720,45 @@ class DashboardRepository {
       await removeCartItem(cartItemId);
       return;
     }
+    // If this is a guest-local cart item (local-only ID), update local cache
+    if (cartItemId.startsWith('guest-')) {
+      // Search cached carts for the item
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      for (final key in keys.where((k) => k.startsWith('cart_'))) {
+        final userId = key.substring('cart_'.length);
+        final cachedCart = await _cacheService.getCachedCart(userId);
+        if (cachedCart == null) continue;
+        final idx = cachedCart.items.indexWhere((i) => i.id == cartItemId);
+        if (idx >= 0) {
+          final items = List<CartItem>.from(cachedCart.items);
+          if (quantity <= 0) {
+            items.removeAt(idx);
+          } else {
+            final existing = items[idx];
+            items[idx] = existing.copyWith(
+              quantity: quantity,
+              totalCents: quantity * existing.unitPriceCents,
+            );
+          }
+
+          final updatedCart = Cart(
+            id: cachedCart.id,
+            userId: cachedCart.userId,
+            status: cachedCart.status,
+            items: items,
+            createdAt: cachedCart.createdAt,
+            updatedAt: DateTime.now(),
+          );
+
+          await _cacheService.cacheCart(userId, updatedCart);
+          return;
+        }
+      }
+
+      // If not found in cache, nothing to do
+      return;
+    }
 
     await _client
         .from('cart_items')
@@ -687,6 +789,34 @@ class DashboardRepository {
 
   /// Remove item from cart
   Future<void> removeCartItem(String cartItemId) async {
+    // If this is a guest-local item, remove from the cached cart
+    if (cartItemId.startsWith('guest-')) {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      for (final key in keys.where((k) => k.startsWith('cart_'))) {
+        final userId = key.substring('cart_'.length);
+        final cachedCart = await _cacheService.getCachedCart(userId);
+        if (cachedCart == null) continue;
+        final idx = cachedCart.items.indexWhere((i) => i.id == cartItemId);
+        if (idx >= 0) {
+          final items = List<CartItem>.from(cachedCart.items)..removeAt(idx);
+          final updatedCart = Cart(
+            id: cachedCart.id,
+            userId: cachedCart.userId,
+            status: cachedCart.status,
+            items: items,
+            createdAt: cachedCart.createdAt,
+            updatedAt: DateTime.now(),
+          );
+          await _cacheService.cacheCart(userId, updatedCart);
+          return;
+        }
+      }
+
+      // Not found locally, nothing further to do
+      return;
+    }
+
     // Fetch userId before deletion
     final itemData = await _client
         .from('cart_items')
@@ -718,6 +848,14 @@ class DashboardRepository {
 
   /// Clear all items from cart
   Future<void> clearCart(String cartId) async {
+    // If clearing an ephemeral guest cart, remove cached cart.
+    // Note: guest cached carts are stored under the user id 'guest'
+    // (key = 'cart_guest'), while the ephemeral cart uses id 'guest-local'.
+    if (cartId == 'guest-local') {
+      await _cacheService.clearUserCache('guest');
+      return;
+    }
+
     // Fetch userId before clearing
     final cartData = await _client
         .from('carts')
@@ -739,8 +877,75 @@ class DashboardRepository {
     }
   }
 
+  /// Merge a locally-cached guest cart into the authenticated user's server cart.
+  ///
+  /// This reads the cached cart for [guestUserId] (typically 'guest') and
+  /// replays its items into the authenticated user's cart in Postgres. After
+  /// a successful merge the cached guest cart is cleared.
+  Future<void> mergeGuestCartIntoUser({
+    required String guestUserId,
+    required String authenticatedUserId,
+  }) async {
+    try {
+      final guestCart = await _cacheService.getCachedCart(guestUserId);
+      if (guestCart == null || guestCart.items.isEmpty) return;
+
+      // Ensure authenticated user has a server cart
+      final authCart = await getOrCreateCart(authenticatedUserId);
+      final authCartId = authCart.id;
+
+      // For each guest item, either upsert into remote cart_items
+      for (final item in guestCart.items) {
+        // Look for existing same product (+ variant) in user's cart
+        final existing = await _client
+            .from('cart_items')
+            .select('id,quantity')
+            .eq('cart_id', authCartId)
+            .eq('product_id', item.productId)
+            .maybeSingle();
+
+        if (existing != null) {
+          final newQuantity = (existing['quantity'] as int) + item.quantity;
+          await _client
+              .from('cart_items')
+              .update({'quantity': newQuantity})
+              .eq('id', existing['id'] as String);
+        } else {
+          await _client.from('cart_items').insert({
+            'cart_id': authCartId,
+            'product_id': item.productId,
+            'variant_id': item.variantId,
+            'quantity': item.quantity,
+            'unit_price_cents': item.unitPriceCents,
+            'currency': item.currency,
+          });
+        }
+      }
+
+      // Refresh and cache the authenticated user's cart
+      final updatedAuthCart = await getOrCreateCart(authenticatedUserId);
+      await _cacheService.cacheCart(authenticatedUserId, updatedAuthCart);
+
+      // Clear guest cache
+      await _cacheService.clearUserCache(guestUserId);
+    } catch (e) {
+      // Don't rethrow — merge should be best-effort and not block login
+    }
+  }
+
   /// Fetch saved addresses for a user.
   Future<List<Address>> getUserAddresses(String userId) async {
+    // Guard against non-UUID user IDs (for example the guest user), as the
+    // `user_id` column in Postgres is a UUID type and passing a non-UUID
+    // string (like "guest") results in a Postgres error. For guest users
+    // we return an empty list instead of querying the database.
+    const uuidPattern =
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+    final isUuid = RegExp(uuidPattern).hasMatch(userId);
+    if (!isUuid || userId.toLowerCase() == 'guest') {
+      return <Address>[];
+    }
+
     final response = await _client
         .from('addresses')
         .select(

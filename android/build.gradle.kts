@@ -8,6 +8,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
 import org.gradle.kotlin.dsl.getByType
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 allprojects {
     repositories {
@@ -74,6 +75,11 @@ subprojects {
     }
     plugins.withId("com.android.library") {
         project.configureRequestedToolchain()
+    }
+
+    // Ensure Kotlin compiler language level is at least 1.6+ for all kotlin compile tasks
+    tasks.withType(KotlinCompile::class).configureEach {
+        kotlinOptions.freeCompilerArgs += listOf("-language-version=1.8")
     }
 }
 

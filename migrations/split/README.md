@@ -88,6 +88,10 @@ Run each table file, then its corresponding policy file (when present). Policies
    - policies/40_promos_policies.sql
 41. 41_shipping_settings.sql
    - policies/41_shipping_settings_policies.sql
+42. 42_ticket_messaging_enhancements.sql
+   - policies/16_ticket_messages_policies.sql (updated for vendor access)
+43. 43_support_ticket_resolution.sql
+44. 44_support_ticket_contact.sql
 
 Notes
 - Many tables reference `auth.users` and use `auth.uid()` inside RLS policies: this is specific to Supabase. Ensure Supabase Auth exists before running.

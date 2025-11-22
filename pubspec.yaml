@@ -50,6 +50,10 @@ dependencies:
   firebase_messaging: ^15.1.6
   # Local notifications for foreground display
   flutter_local_notifications: ^18.0.1
+  # Sentry for error and performance monitoring
+  sentry_flutter: ^7.10.0
+  # Package info for release naming
+  package_info_plus: ^4.0.0
   # Logging framework for production code
   logging: ^1.2.0
   # Native Google Sign-In support on Android/iOS
@@ -61,6 +65,7 @@ dependencies:
   barcode: ^2.2.9
 
 dev_dependencies:
+  sentry_dart_plugin: ^3.2.0
   flutter_test:
     sdk: flutter
 
@@ -124,3 +129,9 @@ dependency_overrides:
   sign_in_with_apple: ^7.0.1
   sign_in_with_apple_platform_interface: ^2.0.0
   sign_in_with_apple_web: ^3.0.0
+
+sentry:
+  upload_debug_symbols: true
+  upload_source_maps: true
+  project: flutter
+  org: jomarket

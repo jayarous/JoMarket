@@ -3,9 +3,9 @@
 This file tracks the development progress of the JoMarket multivendor e-commerce app based on the implementation roadmap in `design_plan.md`. Milestones are marked with checkboxes as they are completed. Updates should occur at every stage to reflect current status.
 
 ## Current Stage Summary
-- Stage: Phase 6 - Delivery Logistics (carrier go-live milestone)
-- Highlights: Identity & Access plus buyer/seller pillars are complete (Supabase Auth/OAuth + guest flows in `lib/auth/auth_gate.dart`, role-aware shells in `lib/app/role_aware_home/*`, profile management in `lib/profile/*`, shopper browse/cart/checkout/offline caching in `lib/app/product_*`, `shopping_cart_screen.dart`, `checkout_wizard_screen.dart`, `offline_cache_service.dart`, and seller workspaces/analytics/KYC/support in `lib/app/seller/*` and `lib/app/vendor/*`). Delivery tooling is now front-and-center with courier dashboards, dispatch tooling, barcode scanner, proof-of-delivery capture, and shipment/notification Edge Functions under `lib/app/delivery/*` and `supabase/functions/`.
-- Pending Prerequisites: Complete iOS push delivery (entitlements, APNs keys, notification preference persistence) and continue broad automated test coverage for moderation/support flows. Payments, tax/address validation, carrier integrations, and logistics smoke tests are now in place.
+- Stage: Phase 7 - Support, Reviews, & Moderation
+- Highlights: Shoppers, sellers, and delivery roles remain feature-complete while the support pillar now ships end-to-end. Sellers have a multi-channel messaging workspace (`lib/app/seller/support/*`) with realtime alerts, admins triage escalations via `lib/app/admin/moderation/*`, and the brand-new review moderation suite (`lib/app/admin/reviews/*`) handles approvals, hides, and audit logging. Delivery tooling continues to operate alongside Shippo/Stripe integrations and Edge Functions.
+- Pending Prerequisites: Complete iOS push delivery (entitlements, APNs keys, notification preference persistence) and continue broad automated test coverage for moderation/support flows. Payments, tax/address validation, carrier integrations, and logistics smoke tests are in place while observability/perf instrumentation still needs to land.
 
 ## Implementation Roadmap
 
@@ -28,7 +28,7 @@ This file tracks the development progress of the JoMarket multivendor e-commerce
 - [x] Deliverer module (assignment, routing, proof-of-delivery), dispatch tooling, Shippo integration, and push notifications. *(Status: Completed 2025-11-17 - new `checkout-quote`/`shipping-purchase-label` functions call Shippo for live rates + labels, `ShipmentLabelService` consumes carrier results with fallbacks, seller shipments persist shipping rate tokens, and delivery routing math moved into `RouteOptimizer` with automated coverage. Remaining work is polish + push notification tuning tracked separately.)*
 
 ### Phase 7: Support, Reviews, & Moderation
-- [ ] Implement messaging, reviews/ratings with moderation pipelines, support tickets, and content management tooling. *(Status: In Progress - moderation dashboards/repositories in `lib/app/admin/moderation/*`, ticket detail dialogs, and seller support flows are implemented (plus Supabase delivery/moderation migrations), but multi-channel messaging and production-ready review automation still require validation.)*
+- [x] Implement messaging, reviews/ratings with moderation pipelines, support tickets, and content management tooling. *(Status: Completed 2025-11-22 - sellers and admins now share realtime messaging (`lib/app/seller/support/*`, `lib/app/shared/services/ticket_realtime_service.dart`), support escalations flow through the moderation dashboard, and the new review moderation tooling in `lib/app/admin/reviews/*` manages approvals/rejections with audit trails and stats.)*
 
 ### Phase 8: Quality, Scaling & Launch
 - [ ] Load testing, security review, localization, beta rollout, app store submission, operational playbooks, and roadmap for post-launch enhancements. *(Status: Not Started)*

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/shared/services/push_notification_service.dart';
@@ -39,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
   String? _selectedRoleId;
   bool _signingOut = false;
+  StreamSubscription<AuthState>? _authSub;
 
   @override
   void initState() {
@@ -47,6 +50,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _selectedRoleId =
         widget.activeRole?.id ??
         (widget.roles.isNotEmpty ? widget.roles.first.id : null);
+    // Listen for auth changes so that when a guest signs in we refresh the
+    // profile shown on this screen to reflect the authenticated user.
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) async {
+      try {
+        final session = data.session;
+        if (session != null) {
+          final newUserId = session.user.id;
+          if (newUserId != _profile.userId) {
+            final refreshed = await widget.repository.fetchOrCreateProfile(
+              userId: newUserId,
+            );
+            if (!mounted) return;
+            setState(() => _profile = refreshed);
+            // Notify higher-level listeners that profile changed.
+            widget.onReloadRequested();
+          }
+        }
+      } catch (e) {
+        // Ignore refresh failures — UI can be refreshed manually.
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -96,7 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       widget.onRoleChanged?.call(role);
     }
-    
+
     if (mounted && Navigator.canPop(context)) {
       Navigator.pop(context);
     }

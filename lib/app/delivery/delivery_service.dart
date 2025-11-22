@@ -138,45 +138,73 @@ class DeliveryService {
     String? notes,
     String? deliveryCondition,
   }) async {
-    final deliveredAtIso = DateTime.now().toUtc().toIso8601String();
+    // Check if a proof of delivery already exists for this shipment so we can
+    // update it rather than inserting a duplicate and tripping the unique key.
+    final existingPod = await _client
+        .from('proof_of_delivery')
+        .select('id,delivered_at')
+        .eq('shipment_id', shipmentId)
+        .maybeSingle();
 
-    // We need the order ID so the seller side can move the order to "delivered".
+    final deliveredAtIso = (existingPod?['delivered_at'] as String?) ??
+        DateTime.now().toUtc().toIso8601String();
+
+    // We need the order ID and current shipment status so the seller side can
+    // move the order to "delivered" when the POD is first created.
     final shipmentRecord = await _client
         .from('shipments')
-        .select('order_id')
+        .select('order_id,status,delivered_at')
         .eq('id', shipmentId)
         .maybeSingle();
     final orderId = shipmentRecord?['order_id'] as String?;
+    final shipmentStatus = shipmentRecord?['status'] as String?;
 
-    final podData = {
+    final isNewPod = existingPod == null;
+    final podData = <String, dynamic>{
       'shipment_id': shipmentId,
       'staff_id': staffId,
       'delivered_at': deliveredAtIso,
       'recipient_name': recipientName,
       'recipient_signature_url': recipientSignatureUrl,
-      'photo_urls': photoUrls,
       'latitude': latitude,
       'longitude': longitude,
       'notes': notes,
       'delivery_condition': deliveryCondition ?? 'good',
     };
+    if (photoUrls != null) {
+      podData['photo_urls'] = photoUrls;
+    } else if (isNewPod) {
+      podData['photo_urls'] = <String>[];
+    }
+    final response = isNewPod
+        ? await _client
+            .from('proof_of_delivery')
+            .insert(podData)
+            .select()
+            .single()
+        : await _client
+            .from('proof_of_delivery')
+            .update(podData)
+            .eq('shipment_id', shipmentId)
+            .select()
+            .single();
 
-    final response = await _client
-        .from('proof_of_delivery')
-        .insert(podData)
-        .select()
-        .single();
+    final shipmentAlreadyDelivered = shipmentStatus == 'delivered';
+    final shouldUpdateShipmentStatus = !shipmentAlreadyDelivered ||
+        shipmentRecord?['delivered_at'] == null;
 
-    // Update shipment to delivered status
-    await _client
-        .from('shipments')
-        .update({
-          'status': 'delivered',
-          'delivered_at': deliveredAtIso,
-        })
-        .eq('id', shipmentId);
+    if (shouldUpdateShipmentStatus) {
+      await _client
+          .from('shipments')
+          .update({
+            'status': 'delivered',
+            'delivered_at': deliveredAtIso,
+          })
+          .eq('id', shipmentId);
+    }
 
-    if (orderId != null) {
+    final shouldSyncOrder = orderId != null && !shipmentAlreadyDelivered;
+    if (shouldSyncOrder) {
       // Keep the seller's order details in sync with the delivery status.
       await _client
           .from('orders')

@@ -8,12 +8,15 @@ class CreateTicketDialog extends StatefulWidget {
     required this.vendorId,
     required this.vendorName,
     required this.repository,
+    this.currentUserId,
     super.key,
   });
 
   final String vendorId;
   final String vendorName;
   final SellerRepository repository;
+  // Optional override for tests to avoid depending on Supabase.instance
+  final String? currentUserId;
 
   @override
   State<CreateTicketDialog> createState() => _CreateTicketDialogState();
@@ -74,7 +77,8 @@ class _CreateTicketDialogState extends State<CreateTicketDialog> {
     });
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final userId =
+          widget.currentUserId ?? Supabase.instance.client.auth.currentUser!.id;
 
       final ticket = await widget.repository.createSupportTicket(
         vendorId: widget.vendorId,
@@ -182,28 +186,29 @@ class _CreateTicketDialogState extends State<CreateTicketDialog> {
                   hintText: 'Select if this ticket is about a specific order',
                   border: OutlineInputBorder(),
                 ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('No related order'),
-                  ),
-                  if (_isLoadingOrders)
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      enabled: false,
-                      child: Text('Loading orders...'),
-                    )
-                  else
-                    ..._orders.map((order) {
-                      return DropdownMenuItem<String?>(
-                        value: order.orderId,
-                        child: Text(
-                          '${order.orderNumber} (${order.status})',
-                          style: const TextStyle(fontFamily: 'monospace'),
+                items: _isLoadingOrders
+                    ? [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          enabled: false,
+                          child: Text('Loading orders...'),
                         ),
-                      );
-                    }),
-                ],
+                      ]
+                    : [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('No related order'),
+                        ),
+                        ..._orders.map((order) {
+                          return DropdownMenuItem<String?>(
+                            value: order.orderId,
+                            child: Text(
+                              '${order.orderNumber} (${order.status})',
+                              style: const TextStyle(fontFamily: 'monospace'),
+                            ),
+                          );
+                        }),
+                      ],
                 onChanged: (value) {
                   setState(() {
                     _selectedOrderId = value;

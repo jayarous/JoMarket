@@ -63,7 +63,10 @@ class TicketRealtimeService {
         filter: 'ticket_id=eq.$ticketId',
       ),
       (payload, [_]) {
-        _handleNewMessage(ticketId, payload, controller);
+        final Map<String, dynamic> record =
+            (payload['new'] as Map<String, dynamic>?) ?? {};
+        if (record.isEmpty) return;
+        _emitMessageEvent(controller, record);
       },
     );
 
@@ -168,6 +171,23 @@ class TicketRealtimeService {
       },
     );
 
+    // Listen for ticket message inserts scoped by vendor_id (populated via trigger)
+    stream.on(
+      RealtimeListenTypes.postgresChanges,
+      ChannelFilter(
+        event: 'INSERT',
+        schema: 'public',
+        table: 'ticket_messages',
+        filter: 'vendor_id=eq.$vendorId',
+      ),
+      (payload, [_]) {
+        final Map<String, dynamic> record =
+            (payload['new'] as Map<String, dynamic>?) ?? {};
+        if (record.isEmpty) return;
+        _emitMessageEvent(controller, record);
+      },
+    );
+
     // Subscribe to channel
     stream.subscribe();
     _channels[channelName] = channel;
@@ -231,15 +251,13 @@ class TicketRealtimeService {
     );
   }
 
-  void _handleNewMessage(
-    String ticketId,
-    Map<String, dynamic> payload,
+  void _emitMessageEvent(
     StreamController<TicketRealtimeEvent> controller,
+    Map<String, dynamic> record,
   ) {
-    final Map<String, dynamic> record =
-        (payload['new'] as Map<String, dynamic>?) ?? {};
-
     if (record.isEmpty) return;
+    final ticketId = record['ticket_id'] as String?;
+    if (ticketId == null) return;
 
     controller.add(
       TicketRealtimeEvent(

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
+import '../auth/widgets/auth_form.dart';
 import 'accessibility_helper.dart';
 import 'checkout_wizard_screen.dart';
 import 'offline_cache_service.dart';
@@ -199,6 +203,130 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   Future<void> _checkout(Cart cart) async {
     if (_isCheckingOut) return;
 
+    final navigator = Navigator.of(context);
+
+    // If user/cart is a guest, require sign-in before proceeding.
+    final isGuestUser = widget.userId == 'guest' || cart.id == 'guest-local';
+    if (isGuestUser) {
+      // Ask the user to sign in before checkout
+      final shouldSignIn = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Sign in required'),
+          content: const Text('Please sign in to continue to checkout.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sign In'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldSignIn != true) return;
+
+      // Navigate to the AuthForm. After it returns, wait for the auth
+      // state to become signed-in (some flows use external OAuth and the
+      // auth state may change asynchronously). We wait up to a short
+      // timeout and proceed if the user signs in.
+      await navigator.push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => AuthForm(),
+          fullscreenDialog: true,
+        ),
+      );
+
+      if (!mounted) return;
+
+      // If the SDK already reports a signed-in user, continue immediately.
+      var currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser == null) {
+        final auth = Supabase.instance.client.auth;
+        final completer = Completer<bool>();
+        late final StreamSubscription sub;
+        sub = auth.onAuthStateChange.listen((data) {
+          if (data.session != null && !completer.isCompleted) {
+            completer.complete(true);
+          }
+        });
+
+        var signedIn = false;
+        try {
+          signedIn = await completer.future.timeout(
+            const Duration(seconds: 12),
+          );
+        } catch (_) {
+          signedIn = false;
+        } finally {
+          await sub.cancel();
+        }
+
+        if (!signedIn) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Sign in required to continue.')),
+            );
+          }
+          return;
+        }
+
+        currentUser = Supabase.instance.client.auth.currentUser;
+      }
+
+      // Signed in: load the authenticated user's server cart and continue to checkout
+      final authUserId = currentUser!.id;
+      final authCart = await widget.repository.getOrCreateCart(authUserId);
+      if (!mounted) return;
+
+      setState(() {
+        _isCheckingOut = true;
+      });
+
+      try {
+        final receipt = await navigator.push<CheckoutOrderReceipt?>(
+          MaterialPageRoute(
+            builder: (context) => CheckoutWizardScreen(
+              userId: authUserId,
+              cart: authCart,
+              repository: widget.repository,
+              promoCode: _appliedPromo,
+              promoDiscountCents: _promoDiscountCents,
+              loyaltyCreditsCents: _applyLoyaltyCredit
+                  ? _loyaltyCreditsCents
+                  : 0,
+              isGiftOrder: _isGiftOrder,
+              giftMessage: _isGiftOrder
+                  ? _giftMessageController.text.trim()
+                  : null,
+            ),
+          ),
+        );
+
+        if (receipt != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Order ${receipt.orderNumber} placed successfully'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          _reload();
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isCheckingOut = false;
+          });
+        }
+      }
+
+      return;
+    }
+
+    // Non-guest flow: proceed directly to checkout using the provided cart
     setState(() {
       _isCheckingOut = true;
     });
@@ -450,7 +578,8 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   Widget _buildCartSummary(BuildContext context, Cart cart) {
     final theme = Theme.of(context);
     final subtotal = cart.subtotalCents / 100;
-    final shipping = 0.0; // Calculated at checkout based on address + vendor rules
+    final shipping =
+        0.0; // Calculated at checkout based on address + vendor rules
     final loyaltyDiscount = _applyLoyaltyCredit
         ? (_loyaltyCreditsCents / 100)
         : 0.0;
@@ -514,8 +643,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 ),
                 Text(
                   'Calculated at checkout',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -524,8 +654,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
               alignment: Alignment.centerLeft,
               child: Text(
                 'Pick a shipping address to see exact fees in the next step.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
             if (promoDiscount > 0) ...[

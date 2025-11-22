@@ -29,6 +29,8 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
+        // Ensure a modern Kotlin language version for newer plugin dependencies
+        freeCompilerArgs += listOf("-language-version=1.8")
     }
 
     defaultConfig {

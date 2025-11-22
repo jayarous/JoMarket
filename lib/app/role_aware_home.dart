@@ -11,6 +11,8 @@ import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
 import 'admin/admin_analytics_screen.dart';
+import 'admin/moderation/moderation_dashboard.dart';
+import 'admin/reviews/review_moderation_screen.dart';
 import 'delivery/delivery_job_screen.dart';
 import 'favorites_screen.dart';
 import 'offline_cache_service.dart';

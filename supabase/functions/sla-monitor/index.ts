@@ -34,7 +34,7 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
+    try {
     // Create Supabase client with service role key
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -45,7 +45,22 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log("[SLA Monitor] Starting SLA status check...");
+    const SERVICE_NAME = "sla-monitor";
+
+    function log(level: "info" | "warn" | "error", message: string, extras: Record<string, unknown> = {}) {
+      const out = {
+        timestamp: new Date().toISOString(),
+        service: SERVICE_NAME,
+        environment: Deno.env.get("ENVIRONMENT") ?? "staging",
+        level,
+        message,
+        ...extras,
+      };
+      // Emit structured JSON to stdout so log forwarders can parse it
+      console.log(JSON.stringify(out));
+    }
+
+    log("info", "Starting SLA status check");
     const now = new Date().toISOString();
     const stats: UpdateStats = { atRisk: 0, breached: 0, errors: [] };
 
@@ -61,7 +76,7 @@ serve(async (req: Request) => {
     }
 
     if (!items || items.length === 0) {
-      console.log("[SLA Monitor] No items to monitor");
+      log("info", "No items to monitor");
       return new Response(
         JSON.stringify({
           success: true,
@@ -72,7 +87,7 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log(`[SLA Monitor] Monitoring ${items.length} items`);
+    log("info", `Monitoring items`, { total_items: items.length });
 
     // Process each item
     for (const item of items as ModerationQueueItem[]) {
@@ -87,25 +102,17 @@ serve(async (req: Request) => {
         // Determine SLA status based on time remaining
         if (hoursRemaining < 0) {
           // Past deadline - BREACHED
-          if (item.sla_status !== "breached") {
+            if (item.sla_status !== "breached") {
             newSlaStatus = "breached";
             stats.breached++;
-            console.log(
-              `[SLA Monitor] Ticket ${item.ticket_id} BREACHED (${
-                Math.abs(hoursRemaining).toFixed(1)
-              }h overdue)`,
-            );
+            log("info", "Ticket breached", { ticket_id: item.ticket_id, overdue_hours: Math.abs(hoursRemaining).toFixed(1) });
           }
         } else if (hoursRemaining < 2) {
           // Less than 2 hours remaining - AT RISK
           if (item.sla_status !== "at_risk" && item.sla_status !== "breached") {
             newSlaStatus = "at_risk";
             stats.atRisk++;
-            console.log(
-              `[SLA Monitor] Ticket ${item.ticket_id} AT RISK (${
-                hoursRemaining.toFixed(1)
-              }h remaining)`,
-            );
+            log("info", "Ticket at risk", { ticket_id: item.ticket_id, hours_remaining: hoursRemaining.toFixed(1) });
           }
         }
 
@@ -120,9 +127,8 @@ serve(async (req: Request) => {
             .eq("id", item.id);
 
           if (updateError) {
-            const errMsg =
-              `Failed to update item ${item.id}: ${updateError.message}`;
-            console.error(`[SLA Monitor] ${errMsg}`);
+            const errMsg = `Failed to update item ${item.id}: ${updateError.message}`;
+            log("error", errMsg, { item_id: item.id, supabase_error: updateError.message });
             stats.errors.push(errMsg);
           }
 
@@ -144,24 +150,18 @@ serve(async (req: Request) => {
             });
 
           if (logError) {
-            console.warn(
-              `[SLA Monitor] Failed to log action for ${item.ticket_id}: ${logError.message}`,
-            );
+            log("warn", "Failed to log action", { ticket_id: item.ticket_id, error: logError.message });
           }
 
           // TODO: Send notifications for breached SLAs
           // This can be enhanced with email/push notifications
           if (newSlaStatus === "breached") {
-            console.log(
-              `[SLA Monitor] TODO: Send breach notification for ticket ${item.ticket_id}`,
-            );
+            log("info", "TODO: Send breach notification", { ticket_id: item.ticket_id });
           }
         }
       } catch (itemError) {
-        const errMsg = `Error processing item ${item.id}: ${
-          itemError instanceof Error ? itemError.message : "Unknown error"
-        }`;
-        console.error(`[SLA Monitor] ${errMsg}`);
+        const errMsg = `Error processing item ${item.id}: ${itemError instanceof Error ? itemError.message : "Unknown error"}`;
+        log("error", errMsg, { item_id: item.id, error: itemError instanceof Error ? itemError.message : String(itemError) });
         stats.errors.push(errMsg);
       }
     }
@@ -178,14 +178,40 @@ serve(async (req: Request) => {
       timestamp: now,
     };
 
-    console.log("[SLA Monitor] Summary:", JSON.stringify(summary, null, 2));
+    // Emit structured summary
+    try {
+      log("info", "Summary", { summary });
+
+      // Write a lightweight metrics row to Supabase for quick dashboarding (optional schema)
+      try {
+        const { error: metricErr } = await supabase.from("function_metrics").insert({
+          function: SERVICE_NAME,
+          environment: Deno.env.get("ENVIRONMENT") ?? "staging",
+          total_monitored: items.length,
+          marked_at_risk: stats.atRisk,
+          marked_breached: stats.breached,
+          errors: stats.errors.length,
+          created_at: now,
+        });
+
+        if (metricErr) {
+          log("warn", "Failed to write metrics", { error: metricErr.message });
+        }
+      } catch (e) {
+        log("warn", "Failed to write metrics (exception)", { error: e instanceof Error ? e.message : String(e) });
+      }
+
+    } catch (e) {
+      // If sending summary fails, still return success payload
+      log("warn", "Failed to emit summary", { error: e instanceof Error ? e.message : String(e) });
+    }
 
     return new Response(
       JSON.stringify(summary),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error("[SLA Monitor] Fatal error:", error);
+    log("error", "Fatal error", { error: error instanceof Error ? error.message : String(error) });
 
     return new Response(
       JSON.stringify({

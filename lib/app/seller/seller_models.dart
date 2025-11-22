@@ -462,6 +462,51 @@ class SupportTicketDetail {
   final String? resolvedByAdmin;
 }
 
+class SupportTicketMessage {
+  const SupportTicketMessage({
+    required this.id,
+    required this.ticketId,
+    this.userId,
+    required this.body,
+    required this.attachments,
+    required this.channel,
+    required this.metadata,
+    required this.createdAt,
+    this.userName,
+  });
+
+  final String id;
+  final String ticketId;
+  final String? userId;
+  final String body;
+  final List<String> attachments;
+  final String channel;
+  final Map<String, dynamic> metadata;
+  final DateTime createdAt;
+  final String? userName;
+
+  factory SupportTicketMessage.fromMap(Map<String, dynamic> map) {
+    final profile = map['profiles'] as Map<String, dynamic>?;
+    return SupportTicketMessage(
+      id: map['id'] as String,
+      ticketId: map['ticket_id'] as String,
+      userId: map['user_id'] as String?,
+      body: map['body'] as String? ?? '',
+      attachments:
+          (map['attachments'] as List<dynamic>?)
+              ?.map((item) => item.toString())
+              .toList() ??
+          const [],
+      channel: map['channel'] as String? ?? 'in_app',
+      metadata: map['metadata'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(map['metadata'] as Map)
+          : const {},
+      createdAt: DateTime.parse(map['created_at'] as String),
+      userName: profile?['full_name'] as String?,
+    );
+  }
+}
+
 /// Analytics data for a time period
 class AnalyticsData {
   const AnalyticsData({

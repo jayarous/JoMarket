@@ -11,7 +11,20 @@ import '../../shared/widgets/in_app_alert_widget.dart';
 import 'ticket_detail_dialog.dart';
 
 class ModerationDashboardScreen extends StatefulWidget {
-  const ModerationDashboardScreen({super.key});
+  const ModerationDashboardScreen({
+    this.currentUserId,
+    this.repository,
+    this.realtimeService,
+    this.pushNotificationService,
+    this.notificationCoordinator,
+    super.key,
+  });
+
+  final String? currentUserId;
+  final ModerationRepository? repository;
+  final TicketRealtimeService? realtimeService;
+  final PushNotificationService? pushNotificationService;
+  final NotificationCoordinator? notificationCoordinator;
 
   @override
   State<ModerationDashboardScreen> createState() =>
@@ -31,6 +44,10 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen>
   final _alertQueue = AlertQueue();
   int _newTicketBadgeCount = 0;
   final List<InAppAlert> _persistentAlerts = [];
+  late final bool _ownsRealtimeService;
+  late final bool _ownsPushService;
+  late final bool _ownsNotificationCoordinator;
+  late final String _currentUserId;
 
   bool _isLoading = true;
   String? _error;
@@ -47,15 +64,26 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _repository = ModerationRepository(Supabase.instance.client);
-    _realtimeService = TicketRealtimeService(Supabase.instance.client);
-    _pushService = PushNotificationService(Supabase.instance.client);
-    _notificationCoordinator = NotificationCoordinator(
-      pushService: _pushService,
-      realtimeService: _realtimeService,
-      userId: Supabase.instance.client.auth.currentUser!.id,
-      isAdmin: true,
-    );
+    final supabaseClient = Supabase.instance.client;
+    _repository = widget.repository ?? ModerationRepository(supabaseClient);
+    _ownsRealtimeService = widget.realtimeService == null;
+    _realtimeService =
+        widget.realtimeService ?? TicketRealtimeService(supabaseClient);
+    _ownsPushService = widget.pushNotificationService == null;
+    _pushService =
+        widget.pushNotificationService ??
+        PushNotificationService(supabaseClient);
+    _ownsNotificationCoordinator = widget.notificationCoordinator == null;
+    _currentUserId =
+        widget.currentUserId ?? supabaseClient.auth.currentUser!.id;
+    _notificationCoordinator =
+        widget.notificationCoordinator ??
+        NotificationCoordinator(
+          pushService: _pushService,
+          realtimeService: _realtimeService,
+          userId: _currentUserId,
+          isAdmin: true,
+        );
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onTabChanged);
     _loadData();
@@ -67,9 +95,15 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen>
   void dispose() {
     _realtimeSubscription?.cancel();
     _alertSubscription?.cancel();
-    _realtimeService.dispose();
-    _notificationCoordinator.dispose();
-    _pushService.dispose();
+    if (_ownsRealtimeService) {
+      _realtimeService.dispose();
+    }
+    if (_ownsNotificationCoordinator) {
+      _notificationCoordinator.dispose();
+    }
+    if (_ownsPushService) {
+      _pushService.dispose();
+    }
     _tabController.dispose();
     super.dispose();
   }
@@ -146,7 +180,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen>
   void _initializeNotifications() {
     // Initialize push notifications
     _pushService.initialize(
-      userId: Supabase.instance.client.auth.currentUser!.id,
+      userId: _currentUserId,
       onNotificationReceived: (payload) {
         _logger.info('Admin foreground notification: ${payload.type}');
       },

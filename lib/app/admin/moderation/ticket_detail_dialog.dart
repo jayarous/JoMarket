@@ -9,11 +9,13 @@ class TicketDetailDialog extends StatefulWidget {
   const TicketDetailDialog({
     required this.queueItem,
     required this.repository,
+    this.realtimeService,
     super.key,
   });
 
   final ModerationQueueItem queueItem;
   final ModerationRepository repository;
+  final TicketRealtimeService? realtimeService;
 
   @override
   State<TicketDetailDialog> createState() => _TicketDetailDialogState();
@@ -23,6 +25,7 @@ class _TicketDetailDialogState extends State<TicketDetailDialog>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   late final TicketRealtimeService _realtimeService;
+  late final bool _ownsRealtimeService;
   StreamSubscription<TicketRealtimeEvent>? _realtimeSubscription;
 
   bool _isLoading = true;
@@ -40,7 +43,9 @@ class _TicketDetailDialogState extends State<TicketDetailDialog>
     super.initState();
     _currentQueueItem = widget.queueItem;
     _tabController = TabController(length: 3, vsync: this);
-    _realtimeService = TicketRealtimeService(Supabase.instance.client);
+    _ownsRealtimeService = widget.realtimeService == null;
+    _realtimeService =
+        widget.realtimeService ?? TicketRealtimeService(Supabase.instance.client);
     _loadTicketDetails();
     _subscribeToRealtimeUpdates();
   }
@@ -48,7 +53,9 @@ class _TicketDetailDialogState extends State<TicketDetailDialog>
   @override
   void dispose() {
     _realtimeSubscription?.cancel();
-    _realtimeService.dispose();
+    if (_ownsRealtimeService) {
+      _realtimeService.dispose();
+    }
     _tabController.dispose();
     _replyController.dispose();
     _noteController.dispose();

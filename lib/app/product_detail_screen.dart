@@ -1035,7 +1035,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 200,
+            height: 260,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _relatedProducts.length,

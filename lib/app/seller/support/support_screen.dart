@@ -17,6 +17,10 @@ class SupportScreen extends StatefulWidget {
     required this.vendorName,
     required this.permissions,
     required this.repository,
+    this.currentUserId,
+    this.realtimeService,
+    this.pushNotificationService,
+    this.notificationCoordinator,
     super.key,
   });
 
@@ -24,6 +28,10 @@ class SupportScreen extends StatefulWidget {
   final String vendorName;
   final SellerPermissions permissions;
   final SellerRepository repository;
+  final String? currentUserId;
+  final TicketRealtimeService? realtimeService;
+  final PushNotificationService? pushNotificationService;
+  final NotificationCoordinator? notificationCoordinator;
 
   @override
   State<SupportScreen> createState() => _SupportScreenState();
@@ -40,6 +48,10 @@ class _SupportScreenState extends State<SupportScreen> {
   late final TicketRealtimeService _realtimeService;
   late final PushNotificationService _pushService;
   late final NotificationCoordinator _notificationCoordinator;
+  late final String _currentUserId;
+  late final bool _ownsRealtimeService;
+  late final bool _ownsPushService;
+  late final bool _ownsNotificationCoordinator;
   StreamSubscription<TicketRealtimeEvent>? _realtimeSubscription;
   StreamSubscription<InAppAlert>? _alertSubscription;
   final _alertQueue = AlertQueue();
@@ -47,14 +59,25 @@ class _SupportScreenState extends State<SupportScreen> {
   @override
   void initState() {
     super.initState();
-    _realtimeService = TicketRealtimeService(Supabase.instance.client);
-    _pushService = PushNotificationService(Supabase.instance.client);
-    _notificationCoordinator = NotificationCoordinator(
-      pushService: _pushService,
-      realtimeService: _realtimeService,
-      userId: Supabase.instance.client.auth.currentUser!.id,
-      isAdmin: false,
-    );
+    final supabaseClient = Supabase.instance.client;
+    _ownsRealtimeService = widget.realtimeService == null;
+    _realtimeService =
+        widget.realtimeService ?? TicketRealtimeService(supabaseClient);
+    _ownsPushService = widget.pushNotificationService == null;
+    _pushService =
+        widget.pushNotificationService ??
+        PushNotificationService(supabaseClient);
+    _ownsNotificationCoordinator = widget.notificationCoordinator == null;
+    _currentUserId =
+        widget.currentUserId ?? supabaseClient.auth.currentUser!.id;
+    _notificationCoordinator =
+        widget.notificationCoordinator ??
+        NotificationCoordinator(
+          pushService: _pushService,
+          realtimeService: _realtimeService,
+          userId: _currentUserId,
+          isAdmin: false,
+        );
     _loadData();
     _subscribeToRealtimeUpdates();
     _initializeNotifications();
@@ -64,9 +87,15 @@ class _SupportScreenState extends State<SupportScreen> {
   void dispose() {
     _realtimeSubscription?.cancel();
     _alertSubscription?.cancel();
-    _realtimeService.dispose();
-    _notificationCoordinator.dispose();
-    _pushService.dispose();
+    if (_ownsRealtimeService) {
+      _realtimeService.dispose();
+    }
+    if (_ownsNotificationCoordinator) {
+      _notificationCoordinator.dispose();
+    }
+    if (_ownsPushService) {
+      _pushService.dispose();
+    }
     super.dispose();
   }
 
@@ -133,7 +162,7 @@ class _SupportScreenState extends State<SupportScreen> {
   void _initializeNotifications() {
     // Initialize push notifications
     _pushService.initialize(
-      userId: Supabase.instance.client.auth.currentUser!.id,
+      userId: _currentUserId,
       onNotificationReceived: (payload) {
         // Handle notification received while app is in foreground
         _logger.info('Foreground notification received: ${payload.type}');

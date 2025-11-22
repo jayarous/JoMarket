@@ -9,6 +9,7 @@ import '../../dashboard/dashboard_repository.dart';
 import '../../profile/profile_models.dart';
 import '../../profile/profile_repository.dart';
 import 'profile_avatar.dart';
+import '../../auth/widgets/auth_form.dart';
 
 /// Reusable profile edit sheet with avatar upload support
 class ProfileEditSheet extends StatefulWidget {
@@ -285,6 +286,14 @@ class _AddressManagementSectionState extends State<AddressManagementSection> {
     _addressesFuture = _loadAddresses();
   }
 
+  @override
+  void didUpdateWidget(covariant AddressManagementSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _refresh();
+    }
+  }
+
   Future<List<Address>> _loadAddresses() async {
     return widget.repository.getUserAddresses(widget.userId);
   }
@@ -311,6 +320,49 @@ class _AddressManagementSectionState extends State<AddressManagementSection> {
         const SnackBar(content: Text('Address added successfully')),
       );
     }
+  }
+
+  bool _isGuestUser() {
+    const uuidPattern =
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+    final isUuid = RegExp(uuidPattern).hasMatch(widget.userId);
+    return !isUuid || widget.userId.toLowerCase() == 'guest';
+  }
+
+  Future<void> _promptSignInForAddress() async {
+    final navigator = Navigator.of(context);
+
+    final shouldSignIn = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign in required'),
+        content: const Text('Please sign in to add a shipping address.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sign In'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSignIn != true) return;
+
+    // Navigate to the AuthForm so the user can sign in. After returning,
+    // refresh addresses to reflect any change in authentication state.
+    await navigator.push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => AuthForm(),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (!mounted) return;
+    _refresh();
   }
 
   Future<void> _deleteAddress(Address address) async {
@@ -362,7 +414,7 @@ class _AddressManagementSectionState extends State<AddressManagementSection> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             FilledButton.icon(
-              onPressed: _addAddress,
+              onPressed: _isGuestUser() ? _promptSignInForAddress : _addAddress,
               icon: const Icon(Icons.add),
               label: const Text('Add'),
             ),
