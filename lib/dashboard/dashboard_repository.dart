@@ -917,6 +917,10 @@ class DashboardRepository {
 
     await _markCartProcessed(cart);
 
+    // Small delay to ensure the order is fully committed to the database
+    // before the payment intent function tries to read it
+    await Future.delayed(const Duration(milliseconds: 500));
+
     return CheckoutOrderDraft(
       orderId: result.orderId,
       orderNumber: result.orderNumber,

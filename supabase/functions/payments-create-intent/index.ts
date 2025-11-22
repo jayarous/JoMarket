@@ -70,12 +70,16 @@ serve(async (req) => {
       );
     }
 
+    console.log("Fetching order with ID:", orderId);
     const order = await fetchOrder(supabaseAdmin, orderId);
+    console.log("Order fetch result:", order ? "found" : "null", order);
+
     if (!order || order.user_id !== user.id) {
       console.error("payments-create-intent order lookup failed", {
         orderId,
         userId: user.id,
         orderUserId: order?.user_id,
+        orderFound: !!order,
       });
       return new Response(
         JSON.stringify({
@@ -121,9 +125,17 @@ serve(async (req) => {
       order.shipping_address_id,
     );
 
+    // JOD (Jordanian Dinar) uses 3 decimal places (1 JOD = 1000 fils)
+    // Most other currencies use 2 decimal places (1 USD = 100 cents)
+    // If the app stores amounts as "cents" (assuming 100 per unit), we need to multiply by 10 for JOD
+    const currency = (order.currency ?? "JOD").toUpperCase();
+    const amountInSmallestUnit = currency === "JOD"
+      ? order.total_cents * 10  // Convert cents to fils (100 cents -> 1000 fils)
+      : order.total_cents;
+
     const intent = await stripe.paymentIntents.create({
-      amount: order.total_cents,
-      currency: (order.currency ?? "JOD").toLowerCase(),
+      amount: amountInSmallestUnit,
+      currency: currency.toLowerCase(),
       customer: stripeCustomerId,
       description: `JoMarket order ${order.order_number}`,
       automatic_payment_methods: { enabled: true },
@@ -146,12 +158,11 @@ serve(async (req) => {
           },
         }
         : undefined,
-      automatic_tax: { enabled: true },
     }, { idempotencyKey: `order-${orderId}` });
 
     const ephemeralKey = await stripe.ephemeralKeys.create(
       { customer: stripeCustomerId },
-      { stripeVersion: "2024-06-20" },
+      { apiVersion: "2024-06-20" },
     );
 
     await upsertPaymentIntentRecord(
@@ -191,7 +202,7 @@ serve(async (req) => {
 async function fetchOrder(client: ReturnType<typeof createClient>, orderId: string) {
   const { data } = await client
     .from("orders")
-    .select("id, user_id, order_number, currency, subtotal_cents, discount_cents, shipping_cents, tax_cents, total_cents, shipping_address_id, shipping_provider")
+    .select("id, user_id, order_number, currency, subtotal_cents, discount_cents, shipping_cents, tax_cents, total_cents, shipping_address_id")
     .eq("id", orderId)
     .maybeSingle();
   return data as any;
