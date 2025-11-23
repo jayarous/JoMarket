@@ -1,0 +1,68 @@
+---
+name: "Sentry Release"
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  sentry-release:
+    name: Create Sentry release and upload symbols
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate SENTRY_AUTH_TOKEN secret
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "${SENTRY_AUTH_TOKEN}" ]; then
+            echo "ERROR: SENTRY_AUTH_TOKEN secret is not set. Add it under Settings → Secrets and variables → Actions.";
+            exit 1;
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java (required for Android Gradle builds)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Sentry CLI
+        run: npm install -g @sentry/cli
+
+      - name: Build Android Release (generate mapping.txt)
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease
+
+      - name: Create and upload Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: jomarket
+          SENTRY_PROJECT: flutter
+        run: |
+          RELEASE=${{ github.sha }}
+          sentry-cli releases -o "$SENTRY_ORG" -p "$SENTRY_PROJECT" new "$RELEASE"
+          # Upload Android ProGuard/R8 mapping files
+          sentry-cli releases -o "$SENTRY_ORG" -p "$SENTRY_PROJECT" files "$RELEASE" upload-sourcemaps "android/app/build/outputs/mapping/release" --ext txt --ext map
+          # (Optional) Upload web/Dart sourcemaps if you build web
+          # sentry-cli releases -o "$SENTRY_ORG" -p "$SENTRY_PROJECT" files "$RELEASE" upload-sourcemaps "build/web" --ext map --ext js
+          sentry-cli releases -o "$SENTRY_ORG" -p "$SENTRY_PROJECT" finalize "$RELEASE"
+
+      - name: Notify
+        run: echo "Sentry release created for ${{ github.sha }}. Ensure SENTRY_AUTH_TOKEN is set in repo secrets."
