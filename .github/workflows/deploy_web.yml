@@ -28,6 +28,20 @@ jobs:
             echo "env/.env created"
           fi
 
+      - name: Ensure root .env exists
+        run: |
+          echo "Ensuring root .env exists"
+          if [ -f .env ]; then
+            echo ".env already exists"
+          else
+            if [ -n "${{ secrets.SUPABASE_KEY }}" ]; then
+              printf '%s\n' "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" > .env
+            else
+              printf '%s\n' "" > .env
+            fi
+            echo ".env created"
+          fi
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
