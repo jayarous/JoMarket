@@ -443,11 +443,7 @@ class _NotificationsEmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 48,
-              color: theme.colorScheme.outline,
-            ),
+            Icon(icon, size: 48, color: theme.colorScheme.outline),
             const SizedBox(height: 16),
             Text(
               title,
@@ -466,10 +462,7 @@ class _NotificationsEmptyState extends StatelessWidget {
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 20),
-              FilledButton(
-                onPressed: onAction,
-                child: Text(actionLabel!),
-              ),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
         ),
@@ -479,10 +472,7 @@ class _NotificationsEmptyState extends StatelessWidget {
 }
 
 class _NotificationErrorBanner extends StatelessWidget {
-  const _NotificationErrorBanner({
-    required this.message,
-    this.onRetry,
-  });
+  const _NotificationErrorBanner({required this.message, this.onRetry});
 
   final String message;
   final VoidCallback? onRetry;
@@ -499,10 +489,7 @@ class _NotificationErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            color: theme.colorScheme.error,
-          ),
+          Icon(Icons.info_outline, color: theme.colorScheme.error),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -513,10 +500,7 @@ class _NotificationErrorBanner extends StatelessWidget {
             ),
           ),
           if (onRetry != null)
-            TextButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
@@ -537,10 +521,7 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor = _colorForNotificationType(
-      theme,
-      notification.type,
-    );
+    final accentColor = _colorForNotificationType(theme, notification.type);
 
     return InkWell(
       onTap: onTap,
@@ -1440,6 +1421,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   int _latestPromoCount = _defaultPromoBanners.length;
   bool _showCartReminder = true;
   int _activeFilterIndex = 0;
+  List<CategorySummary> _latestCategories = const [];
   int _activeNavIndex = 0;
   String _searchQuery = '';
   // Use ValueNotifier so counts can update independently without rebuilding
@@ -1571,15 +1553,17 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
         limit: 20,
       );
       if (!mounted) return;
-      final notificationIds =
-          notifications.map((notification) => notification.id).toSet();
+      final notificationIds = notifications
+          .map((notification) => notification.id)
+          .toSet();
       setState(() {
         _notifications = notifications;
         _notificationLoading = false;
         _notificationsInitialized = true;
         _notificationError = null;
-        _acknowledgedNotificationIds
-            .removeWhere((id) => !notificationIds.contains(id));
+        _acknowledgedNotificationIds.removeWhere(
+          (id) => !notificationIds.contains(id),
+        );
       });
     } catch (e) {
       if (!mounted) return;
@@ -1607,8 +1591,9 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   void _markAllNotificationsRead() {
     if (_notifications.isEmpty) return;
     setState(() {
-      _acknowledgedNotificationIds
-          .addAll(_notifications.map((notification) => notification.id));
+      _acknowledgedNotificationIds.addAll(
+        _notifications.map((notification) => notification.id),
+      );
     });
   }
 
@@ -1985,7 +1970,8 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   }
 
   void _handlePromoCta(_PromoBannerData data) {
-    final action = data.action?.toLowerCase().trim();
+    final rawAction = data.action?.trim();
+    final action = rawAction?.toLowerCase();
     if (action == null || action.isEmpty) {
       _showPromoSnack('${data.title} is coming soon.');
       return;
@@ -2002,7 +1988,27 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       _openProfileFromNav();
       return;
     }
-    _showPromoSnack('Promo action "$action" not wired yet.');
+
+    final uri = rawAction != null ? Uri.tryParse(rawAction) : null;
+    if (uri != null && uri.scheme == 'category') {
+      final identifier = uri.host.isNotEmpty
+          ? uri.host
+          : (uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '');
+      if (identifier.isNotEmpty) {
+        final category = _findCategoryForIdentifier(identifier);
+        if (category != null) {
+          _setCategoryFilter(category.id);
+          _showPromoSnack('Showing ${category.name} collections.');
+          return;
+        }
+      }
+      _showPromoSnack(
+        'Promo category action "$rawAction" could not be mapped.',
+      );
+      return;
+    }
+
+    _showPromoSnack('Promo action "$rawAction" not wired yet.');
   }
 
   void _showPromoSnack(String message) {
@@ -2010,6 +2016,96 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _setCategoryFilter(String? categoryId) {
+    setState(() {
+      _activeFilterIndex = _indexForCategory(categoryId, _latestCategories);
+      _searchQuery = '';
+      _searchController.clear();
+    });
+  }
+
+  CategorySummary? _findCategoryForIdentifier(String identifier) {
+    final normalized = identifier.toLowerCase().trim();
+    if (normalized.isEmpty) return null;
+    final simplified = normalized.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final overrideSlug = _promoSlugOverrides[normalized];
+    if (overrideSlug != null) {
+      final overrideCategory = _categoryBySlug(overrideSlug);
+      if (overrideCategory != null) {
+        return overrideCategory;
+      }
+    }
+    for (final category in _latestCategories) {
+      if (_matchesCategoryIdentifier(category, normalized, simplified)) {
+        return category;
+      }
+    }
+
+    // Second pass: look for categories whose slug or name contains the identifier.
+    for (final category in _latestCategories) {
+      final slug = category.slug.toLowerCase();
+      final name = category.name.toLowerCase();
+      if (slug.contains(normalized) || name.contains(normalized)) {
+        return category;
+      }
+      final simplifiedSlug = slug.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final simplifiedName = name.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (simplifiedSlug.contains(simplified) ||
+          simplifiedName.contains(simplified)) {
+        return category;
+      }
+    }
+
+    return null;
+  }
+
+  static const Map<String, String> _promoSlugOverrides = {
+    'new-arrivals': 'fashion-misc',
+    'fresh-arrivals': 'fashion-misc',
+    'fresh': 'fashion-misc',
+    'winter': 'home-living',
+    'home': 'home',
+    'fashion': 'fashion',
+  };
+
+  bool _matchesCategoryIdentifier(
+    CategorySummary category,
+    String normalized,
+    String simplified,
+  ) {
+    if (category.id.toLowerCase() == normalized) return true;
+    if (category.slug.toLowerCase() == normalized) return true;
+    if (category.name.toLowerCase() == normalized) return true;
+
+    final simplifiedName = category.name.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    final simplifiedSlug = category.slug.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    final simplifiedId = category.id.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+
+    return simplifiedName == simplified ||
+        simplifiedSlug == simplified ||
+        simplifiedId == simplified;
+  }
+
+  CategorySummary? _categoryBySlug(String slug) {
+    final normalized = slug.toLowerCase().trim();
+    if (normalized.isEmpty) return null;
+    for (final category in _latestCategories) {
+      if (category.slug.toLowerCase() == normalized) {
+        return category;
+      }
+    }
+    return null;
   }
 
   @override
@@ -2036,6 +2132,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
             );
           }
           final data = snapshot.data!;
+          _latestCategories = data.categories;
           final promoBanners = _promoBannersFrom(data.promos);
           _latestPromoCount = promoBanners.length;
           final trendingProducts = data.featuredProducts.take(5).toList();
@@ -2121,13 +2218,13 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                               : data.categories[_activeFilterIndex - 1].id,
                           onCategorySelected: (categoryId) {
                             setState(() {
-                              _activeFilterIndex =
-                                  _indexForCategory(categoryId, data.categories);
+                              _activeFilterIndex = _indexForCategory(
+                                categoryId,
+                                data.categories,
+                              );
                             });
                           },
                         ),
-                        const SizedBox(height: 24),
-                        _SectionHeader(title: 'Personalized picks'),
                         const SizedBox(height: 12),
                         _SearchField(
                           focusNode: _searchFocusNode,
@@ -2322,21 +2419,9 @@ class _CategoryFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Categories',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
         SizedBox(
           height: 100,
           child: ListView.builder(

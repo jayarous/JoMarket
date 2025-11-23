@@ -134,11 +134,19 @@ psql "postgresql://postgres.qjwnudofsiznvfcgzwuv:JoMarket_DB_01@aws-0-eu-central
 
 ## Notes
 
-- The promos feature is currently disabled and returns empty results
-- To implement promos in the future:
-  1. Create the `promos` table in the database
-  2. Update `_fetchHomePromos()` in dashboard_repository.dart to query it
-  3. Consider caching promos for offline access
+- The promos feature is now enabled by default and will render cards as long as the `promos` table exists. Use `--dart-define=ENABLE_PROMOS_FEATURE=false` only if you intentionally want to turn the home promo experience off.
+- To ensure promos work:
+  1. Apply `migrations/split/40_promos.sql` and `migrations/split/41_promos_seed.sql` (or rerun the seed) so the table exists with sample rows that reference slugs such as `home-living` and `fashion-misc`.
+  2. If you already applied the seed, adjust the existing rows with:
+     ```sql
+     update public.promos
+     set cta_action = case
+       when title ilike '%winter%' then 'category://home-living'
+       when title ilike '%fresh%' then 'category://fashion-misc'
+       else cta_action
+     end;
+     ```
+  3. Confirm buyers now receive promos and consider adding caching if desired.
 
 - The device token fix is backward compatible:
   - Existing tokens will continue to work

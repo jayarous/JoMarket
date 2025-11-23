@@ -242,44 +242,99 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
                   ),
                 ],
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: 'Search products...',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _searchResults = [];
-                                    _hasSearched = false;
-                                  });
-                                },
-                              )
-                            : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // For narrow widths stack the search field and button vertically
+                  if (constraints.maxWidth < 420) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          decoration: InputDecoration(
+                            hintText: 'Search products...',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchResults = [];
+                                        _hasSearched = false;
+                                      });
+                                    },
+                                  )
+                                : null,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _performSearch(),
+                          onChanged: (_) => setState(() {}),
                         ),
-                        filled: true,
-                        fillColor: theme.colorScheme.surfaceContainerHighest,
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 48,
+                          child: FilledButton(
+                            onPressed: _performSearch,
+                            child: const Text('Search'),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  // Default: inline layout for wider screens
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          decoration: InputDecoration(
+                            hintText: 'Search products...',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchResults = [];
+                                        _hasSearched = false;
+                                      });
+                                    },
+                                  )
+                                : null,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _performSearch(),
+                          onChanged: (_) => setState(() {}),
+                        ),
                       ),
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _performSearch(),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _performSearch,
-                    child: const Text('Search'),
-                  ),
-                ],
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: _performSearch,
+                          child: const Text('Search'),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -438,6 +493,7 @@ class _CategoryDropdown extends StatelessWidget {
 
     return DropdownButtonFormField<String?>(
       initialValue: selectedCategoryId,
+      isExpanded: true,
       decoration: InputDecoration(
         labelText: 'Category',
         prefixIcon: const Icon(Icons.category, size: 20),
@@ -475,6 +531,7 @@ class _SortDropdown extends StatelessWidget {
 
     return DropdownButtonFormField<String>(
       initialValue: sortBy,
+      isExpanded: true,
       decoration: InputDecoration(
         labelText: 'Sort',
         prefixIcon: const Icon(Icons.sort, size: 20),

@@ -5,6 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app/offline_cache_service.dart';
 import 'dashboard_models.dart';
 
+const bool _promosFeatureEnabled = bool.fromEnvironment(
+  'ENABLE_PROMOS_FEATURE',
+  defaultValue: true,
+);
+
 class DashboardRepository {
   DashboardRepository(this._client, {OfflineCacheService? cacheService})
     : _cacheService = cacheService ?? OfflineCacheService();
@@ -16,9 +21,8 @@ class DashboardRepository {
     try {
       final categoriesFuture = _client
           .from('categories')
-          .select('id,name,position')
-          .order('position')
-          .limit(6);
+          .select('id,name,position,slug')
+          .order('position');
 
       final productsFuture = _client
           .from('products')
@@ -79,18 +83,38 @@ class DashboardRepository {
   }
 
   Future<List<HomePromo>> _fetchHomePromos() async {
-    final response = await _client
-        .from('promos')
-        .select(
-          'id,title,subtitle,cta_label,cta_action,primary_color,secondary_color,icon_name',
-        )
-        .eq('is_active', true)
-        .order('sort_order')
-        .limit(10); // Limit for home screen
+    if (!_promosFeatureEnabled) {
+      debugPrint(
+        'Promos feature disabled (see DATABASE_ERRORS_FIX.md); returning empty list.',
+      );
+      return const [];
+    }
 
-    return (response as List<dynamic>)
-        .map((item) => HomePromo.fromMap(item as Map<String, dynamic>))
-        .toList();
+    try {
+      final response = await _client
+          .from('promos')
+          .select(
+            'id,title,subtitle,cta_label,cta_action,primary_color,secondary_color,icon_name',
+          )
+          .eq('is_active', true)
+          .order('sort_order')
+          .limit(10); // Limit for home screen
+
+      return (response as List<dynamic>)
+          .map((item) => HomePromo.fromMap(item as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (error) {
+      final message = error.message.toLowerCase();
+      if (message.contains('promos') ||
+          message.contains('relation "promos"') ||
+          message.contains('table "promos"')) {
+        debugPrint(
+          'Promos table not available; returning empty list per DATABASE_ERRORS_FIX.md.',
+        );
+        return const [];
+      }
+      rethrow;
+    }
   }
 
   Future<List<UserNotification>> getRecentNotifications({

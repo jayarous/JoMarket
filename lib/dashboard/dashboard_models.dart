@@ -3,12 +3,14 @@ class CategorySummary {
     required this.id,
     required this.name,
     required this.position,
+    required this.slug,
     this.parentId,
   });
 
   final String id;
   final String name;
   final int position;
+  final String slug;
   final String? parentId;
 
   factory CategorySummary.fromMap(Map<String, dynamic> map) {
@@ -16,6 +18,7 @@ class CategorySummary {
       id: map['id'] as String,
       name: map['name'] as String? ?? 'Unnamed',
       position: map['position'] as int? ?? 0,
+      slug: map['slug'] as String? ?? '',
       parentId: map['parent_id'] as String?,
     );
   }
