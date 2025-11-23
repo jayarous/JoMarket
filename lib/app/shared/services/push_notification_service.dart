@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -54,7 +54,9 @@ class PushNotificationService {
       }
 
       // Initialize local notifications for foreground display
-      await _initializeLocalNotifications();
+      if (!kIsWeb) {
+        await _initializeLocalNotifications();
+      }
 
       // Get FCM token
       _currentDeviceToken = await _firebaseMessaging.getToken();
@@ -157,12 +159,22 @@ class PushNotificationService {
   }
 
   String _getPlatform() {
-    if (Platform.isIOS) {
-      return 'ios';
-    } else if (Platform.isAndroid) {
-      return 'android';
-    } else {
-      return 'unknown';
+    if (kIsWeb) {
+      return 'web';
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.macOS:
+        return 'macos';
+      case TargetPlatform.windows:
+        return 'windows';
+      case TargetPlatform.linux:
+        return 'linux';
+      case TargetPlatform.fuchsia:
+        return 'fuchsia';
     }
   }
 

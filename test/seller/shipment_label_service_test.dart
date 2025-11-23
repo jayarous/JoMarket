@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jo_market/app/seller/orders/shipment_label_service.dart';
 import 'package:jo_market/app/seller/seller_models.dart';
@@ -17,12 +15,6 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(<String, dynamic>{});
-    const channel = MethodChannel('plugins.flutter.io/path_provider');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (methodCall) async {
-          final tempDir = await Directory.systemTemp.createTemp('label_test');
-          return tempDir.path;
-        });
   });
 
   test(
@@ -83,14 +75,15 @@ void main() {
         ),
       );
 
-      final file = await service.generateLabel(
+      final label = await service.generateLabel(
         vendorName: 'Vendor',
         order: order,
         shipment: shipment,
       );
 
-      expect(await file.exists(), isTrue);
-      expect(await file.length(), greaterThan(0));
+      expect(label.bytes.length, greaterThan(0));
+      expect(label.fileName, endsWith('.pdf'));
+      expect(label.mimeType, 'application/pdf');
     },
   );
 }

@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:barcode/barcode.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,7 +20,7 @@ class ShipmentLabelService {
 
   SupabaseClient get _client => _clientOverride ?? Supabase.instance.client;
 
-  Future<File> generateLabel({
+  Future<LabelDocument> generateLabel({
     required String vendorName,
     required VendorOrderDetail order,
     required VendorShipmentInfo shipment,
@@ -44,7 +44,7 @@ class ShipmentLabelService {
     }
   }
 
-  Future<File> _generateServerLabel({
+  Future<LabelDocument> _generateServerLabel({
     required String vendorName,
     required VendorOrderDetail order,
     required VendorShipmentInfo shipment,
@@ -86,14 +86,15 @@ class ShipmentLabelService {
     final base64Data = data['base64'] as String;
     final fileName =
         (data['fileName'] as String?) ?? 'shipment-${shipment.id}.pdf';
-    final bytes = base64Decode(base64Data);
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
+    final mimeType =
+        (data['mimeType'] as String?) ?? 'application/pdf';
+    final bytes = Uint8List.fromList(base64Decode(base64Data));
+    return LabelDocument(bytes: bytes, fileName: fileName, mimeType: mimeType);
   }
 
-  Future<File?> _downloadCarrierLabel(VendorShipmentInfo shipment) async {
+  Future<LabelDocument?> _downloadCarrierLabel(
+    VendorShipmentInfo shipment,
+  ) async {
     try {
       final body = {
         'shipmentId': shipment.id,
@@ -115,26 +116,25 @@ class ShipmentLabelService {
     }
   }
 
-  Future<File> _downloadLabelFromUrl({
+  Future<LabelDocument> _downloadLabelFromUrl({
     required String labelUrl,
     required String fileName,
   }) async {
-    final client = HttpClient();
-    final request = await client.getUrl(Uri.parse(labelUrl));
-    final response = await request.close();
+    final response = await http.get(Uri.parse(labelUrl));
     if (response.statusCode != 200) {
-      throw HttpException(
-        'Failed to download label (${response.statusCode})',
-      );
+      throw Exception('Failed to download label (${response.statusCode})');
     }
-    final bytes = await consolidateHttpClientResponseBytes(response);
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/shipment-$fileName.pdf');
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
+    final bytes = Uint8List.fromList(response.bodyBytes);
+    final contentType =
+        response.headers['content-type'] ?? 'application/pdf';
+    return LabelDocument(
+      bytes: bytes,
+      fileName: 'shipment-$fileName.pdf',
+      mimeType: contentType,
+    );
   }
 
-  Future<File> _generateLocalLabel({
+  Future<LabelDocument> _generateLocalLabel({
     required String vendorName,
     required VendorOrderDetail order,
     required VendorShipmentInfo shipment,
@@ -236,10 +236,11 @@ class ShipmentLabelService {
     );
 
     final bytes = await doc.save();
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/shipment-${shipment.id}.pdf');
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
+    return LabelDocument(
+      bytes: Uint8List.fromList(bytes),
+      fileName: 'shipment-${shipment.id}.pdf',
+      mimeType: 'application/pdf',
+    );
   }
 
   String _deriveTrackingValue(VendorShipmentInfo shipment) {
@@ -259,4 +260,16 @@ class ShipmentLabelService {
       return item.toString();
     }).map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
   }
+}
+
+class LabelDocument {
+  const LabelDocument({
+    required this.bytes,
+    required this.fileName,
+    this.mimeType = 'application/pdf',
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final String mimeType;
 }

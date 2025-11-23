@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,7 +32,8 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
   late final TextEditingController _countryController;
   bool _saving = false;
   String? _error;
-  String? _newAvatarPath;
+  Uint8List? _avatarPreviewBytes;
+  XFile? _pickedAvatar;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -65,8 +66,10 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
       );
 
       if (image != null) {
+        final bytes = await image.readAsBytes();
         setState(() {
-          _newAvatarPath = image.path;
+          _pickedAvatar = image;
+          _avatarPreviewBytes = bytes;
           _error = null;
         });
       }
@@ -78,19 +81,21 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
   }
 
   Future<String?> _uploadAvatar() async {
-    if (_newAvatarPath == null) return null;
+    if (_pickedAvatar == null) return null;
 
     try {
-      final file = File(_newAvatarPath!);
-      final bytes = await file.readAsBytes();
-      final ext = _newAvatarPath!.split('.').last;
+      final bytes = await _pickedAvatar!.readAsBytes();
+      final parts = _pickedAvatar!.name.split('.');
+      final ext = parts.length > 1 ? parts.last : 'jpg';
       final fileName =
           '${widget.profile.userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
       final path = 'avatars/$fileName';
 
-      await Supabase.instance.client.storage
-          .from('public')
-          .uploadBinary(path, bytes);
+      await Supabase.instance.client.storage.from('public').uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
 
       final url = Supabase.instance.client.storage
           .from('public')
@@ -110,7 +115,7 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
 
     try {
       String? avatarUrl;
-      if (_newAvatarPath != null) {
+      if (_pickedAvatar != null) {
         avatarUrl = await _uploadAvatar();
       }
 
@@ -179,10 +184,10 @@ class _ProfileEditSheetState extends State<ProfileEditSheet> {
             Center(
               child: Stack(
                 children: [
-                  _newAvatarPath != null
+                  _avatarPreviewBytes != null
                       ? CircleAvatar(
                           radius: 56,
-                          backgroundImage: FileImage(File(_newAvatarPath!)),
+                          backgroundImage: MemoryImage(_avatarPreviewBytes!),
                         )
                       : ProfileAvatar(
                           size: 112,
@@ -712,7 +717,13 @@ class AddressCard extends StatelessWidget {
         ),
         title: Row(
           children: [
-            Text(address.label ?? 'Address'),
+            Expanded(
+              child: Text(
+                address.label ?? 'Address',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             if (address.isDefault) ...[
               const SizedBox(width: 8),
               Container(
@@ -753,6 +764,9 @@ class AddressCard extends StatelessWidget {
   }
 }
 
+/// Enrollment cards for vendor/delivery roles.
+enum RoleEnrollmentOption { vendor, delivery }
+
 /// Role enrollment and guest upgrade section
 class RoleEnrollmentSection extends StatelessWidget {
   const RoleEnrollmentSection({
@@ -764,7 +778,7 @@ class RoleEnrollmentSection extends StatelessWidget {
 
   final UserProfile profile;
   final List<RoleAssignment> roles;
-  final VoidCallback onEnrollmentRequested;
+  final ValueChanged<RoleEnrollmentOption> onEnrollmentRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -785,7 +799,7 @@ class RoleEnrollmentSection extends StatelessWidget {
             icon: Icons.store,
             title: 'Become a Vendor',
             description: 'Sell your products on JoMarket',
-            onTap: onEnrollmentRequested,
+            onTap: () => onEnrollmentRequested(RoleEnrollmentOption.vendor),
           ),
         if (!hasDeliveryRole) ...[
           const SizedBox(height: 8),
@@ -793,7 +807,7 @@ class RoleEnrollmentSection extends StatelessWidget {
             icon: Icons.local_shipping,
             title: 'Join Delivery Team',
             description: 'Deliver orders and earn money',
-            onTap: onEnrollmentRequested,
+            onTap: () => onEnrollmentRequested(RoleEnrollmentOption.delivery),
           ),
         ],
         if (hasVendorRole && hasDeliveryRole)

@@ -109,9 +109,12 @@ AddressCard(
 RoleEnrollmentSection(
   profile: userProfile,
   roles: currentRoles,
-  onEnrollmentRequested: () {
-    // Handle enrollment flow
-    // e.g., navigate to vendor application
+  onEnrollmentRequested: (option) {
+    if (option == RoleEnrollmentOption.vendor) {
+      // Launch vendor application wizard
+    } else {
+      // Show delivery onboarding flow
+    }
   },
 )
 ```
@@ -280,6 +283,8 @@ class ProfileScreen extends StatefulWidget {
   }
 }
 ```
+
+> `_handleEnrollment` receives a `RoleEnrollmentOption` so you can switch between vendor and delivery workflows.
 
 ### Pattern 2: Quick Profile Edit from Dashboard
 

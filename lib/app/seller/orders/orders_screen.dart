@@ -286,14 +286,18 @@ class _OrdersTabState extends State<_OrdersTab> {
     setState(() => _ordersUpdating.add(order.orderId));
 
     try {
-      final file = await _labelService.generateLabel(
+      final label = await _labelService.generateLabel(
         vendorName: widget.vendorName,
         order: order,
         shipment: shipment,
       );
 
       await Share.shareXFiles([
-        XFile(file.path),
+        XFile.fromData(
+          label.bytes,
+          mimeType: label.mimeType,
+          name: label.fileName,
+        ),
       ], text: 'Shipment label for Order #${order.orderNumber}');
 
       if (mounted) {

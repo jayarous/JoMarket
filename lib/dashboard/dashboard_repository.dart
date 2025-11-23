@@ -1,9 +1,11 @@
-﻿import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/offline_cache_service.dart';
 import 'dashboard_models.dart';
+import '../profile/profile_models.dart';
 
 const bool _promosFeatureEnabled = bool.fromEnvironment(
   'ENABLE_PROMOS_FEATURE',
@@ -1320,6 +1322,56 @@ class DashboardRepository {
       currency: orderResponse['currency'] as String? ?? cart.currency,
       totalCents: orderResponse['total_cents'] as int? ?? charges.totalCents,
     );
+  }
+
+  /// Create a support ticket containing the enrollment request details.
+  Future<String> submitRoleEnrollmentRequest({
+    required String userId,
+    required AppUserRole targetRole,
+    required String subject,
+    required String message,
+    Map<String, dynamic>? extraData,
+    String priority = 'high',
+  }) async {
+    final metadata = extraData ?? const <String, dynamic>{};
+    final detailBuffer = StringBuffer()
+      ..writeln('Requested role: ${targetRole.label}')
+      ..writeln()
+      ..writeln(message.trim());
+
+    if (metadata.isNotEmpty) {
+      detailBuffer
+        ..writeln()
+        ..writeln('Additional details:')
+        ..writeln(const JsonEncoder.withIndent('  ').convert(metadata));
+    }
+
+    final ticketResponse = await _client
+        .from('support_tickets')
+        .insert({
+          'user_id': userId,
+          'subject': subject,
+          'priority': priority,
+          'tags': ['role_enrollment', targetRole.databaseValue],
+          'escalation_reason': detailBuffer.toString().trim(),
+        })
+        .select('id,vendor_id')
+        .single();
+
+    final ticketId = ticketResponse['id'] as String;
+    final ticketVendorId = ticketResponse['vendor_id'] as String?;
+
+    if (ticketVendorId != null) {
+      await _client.from('ticket_messages').insert({
+        'ticket_id': ticketId,
+        'vendor_id': ticketVendorId,
+        'user_id': userId,
+        'body': message.trim(),
+        'metadata': metadata,
+      });
+    }
+
+    return ticketId;
   }
 
   // ========== Favorites Methods ==========

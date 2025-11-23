@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -29,8 +29,7 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
 
   bool _isSubmitting = false;
   String? _signatureUrl;
-  final List<String> _photoUrls = [];
-  final List<File> _photoFiles = [];
+  final List<_DeliveryPhoto> _photos = [];
   String _deliveryCondition = 'good';
 
   @override
@@ -51,15 +50,14 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
     if (photo != null) {
       setState(() => _isSubmitting = true);
       try {
-        final file = File(photo.path);
-        final url = await _uploadFile(
-          file,
+        final bytes = await photo.readAsBytes();
+        final url = await _uploadBytes(
+          bytes,
           'delivery_photos',
           'photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
         );
         setState(() {
-          _photoUrls.add(url);
-          _photoFiles.add(file);
+          _photos.add(_DeliveryPhoto(bytes: bytes, url: url));
           _isSubmitting = false;
         });
       } catch (e) {
@@ -73,11 +71,17 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
     }
   }
 
-  Future<String> _uploadFile(File file, String bucket, String fileName) async {
+  Future<String> _uploadBytes(
+    Uint8List bytes,
+    String bucket,
+    String fileName,
+  ) async {
     final path = '${widget.shipmentId}/$fileName';
-    await Supabase.instance.client.storage
-        .from(bucket)
-        .upload(path, file, fileOptions: const FileOptions(upsert: true));
+    await Supabase.instance.client.storage.from(bucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
 
     return Supabase.instance.client.storage.from(bucket).getPublicUrl(path);
   }
@@ -97,7 +101,8 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
         staffId: widget.staffId,
         recipientName: _recipientNameController.text.trim(),
         recipientSignatureUrl: _signatureUrl,
-        photoUrls: _photoUrls.isNotEmpty ? _photoUrls : null,
+        photoUrls:
+            _photos.isNotEmpty ? _photos.map((photo) => photo.url).toList() : null,
         latitude: latitude,
         longitude: longitude,
         notes: _notesController.text.trim(),
@@ -259,7 +264,7 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        if (_photoFiles.isNotEmpty)
+        if (_photos.isNotEmpty)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -268,15 +273,16 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
-            itemCount: _photoFiles.length,
+            itemCount: _photos.length,
             itemBuilder: (context, index) {
+              final photo = _photos[index];
               return Stack(
                 fit: StackFit.expand,
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      _photoFiles[index],
+                    child: Image.memory(
+                      photo.bytes,
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -286,8 +292,7 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
                     child: GestureDetector(
                       onTap: () {
                         setState(() {
-                          _photoFiles.removeAt(index);
-                          _photoUrls.removeAt(index);
+                          _photos.removeAt(index);
                         });
                       },
                       child: Container(
@@ -402,4 +407,11 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
       ),
     );
   }
+}
+
+class _DeliveryPhoto {
+  const _DeliveryPhoto({required this.bytes, required this.url});
+
+  final Uint8List bytes;
+  final String url;
 }

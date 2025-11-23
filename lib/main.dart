@@ -7,6 +7,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'app/app.dart';
 import 'bootstrap/supabase_bootstrap.dart';
@@ -46,12 +47,7 @@ Future<void> main() async {
         options.tracesSampleRate = 0.01;
       },
       appRunner: () async {
-        // Initialize Firebase (requires google-services.json / GoogleService-Info.plist)
-        await Firebase.initializeApp();
-
-        // Register Firebase messaging background handler and helpers
-        await FirebaseInitializer.initialize();
-
+        await _initializeFirebaseIfSupported();
         await bootstrapSupabase();
         await _bootstrapStripe();
 
@@ -77,8 +73,7 @@ Future<void> main() async {
     );
   } else {
     // Sentry DSN not provided; start app without Sentry
-    await Firebase.initializeApp();
-    await FirebaseInitializer.initialize();
+    await _initializeFirebaseIfSupported();
     await bootstrapSupabase();
     await _bootstrapStripe();
     // Optionally run a one-time Sentry test (controlled by .env)
@@ -90,6 +85,16 @@ Future<void> main() async {
 }
 
 Future<void> _bootstrapStripe() async {
+  // flutter_stripe uses platform APIs that are not available on web.
+  // Avoid calling into the native Stripe initialization when running
+  // in a browser to prevent `Platform._operatingSystem` errors.
+  if (kIsWeb) {
+    debugPrint(
+      'Stripe initialization skipped on web; web uses server-side flows.',
+    );
+    return;
+  }
+
   const fromDefine = String.fromEnvironment('STRIPE_PUBLISHABLE_KEY');
   final publishableKey = fromDefine.isNotEmpty
       ? fromDefine
@@ -146,4 +151,14 @@ Future<void> _maybeRunOneTimeSentryTest(bool sentryEnabled) async {
       await Sentry.captureException(e, stackTrace: st);
     } catch (_) {}
   }
+}
+
+Future<void> _initializeFirebaseIfSupported() async {
+  if (kIsWeb) {
+    debugPrint('Firebase initialization skipped on web; push alerts disabled.');
+    return;
+  }
+
+  await Firebase.initializeApp();
+  await FirebaseInitializer.initialize();
 }

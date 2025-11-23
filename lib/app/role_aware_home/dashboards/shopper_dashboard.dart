@@ -1,5 +1,7 @@
 part of 'package:jo_market/app/role_aware_home.dart';
 
+enum _SortOption { relevance, priceAsc, priceDesc, nameAsc, nameDesc }
+
 class ShopperDashboard extends StatefulWidget {
   const ShopperDashboard({
     required this.profile,
@@ -131,6 +133,8 @@ class _SearchField extends StatelessWidget {
     required this.onClear,
     this.onSubmitted,
     this.onAdvancedSearch,
+    this.currentSort = _SortOption.relevance,
+    this.onSortChanged,
   });
 
   final FocusNode focusNode;
@@ -139,6 +143,8 @@ class _SearchField extends StatelessWidget {
   final VoidCallback onClear;
   final ValueChanged<String>? onSubmitted;
   final VoidCallback? onAdvancedSearch;
+  final _SortOption currentSort;
+  final ValueChanged<_SortOption>? onSortChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +187,7 @@ class _SearchField extends StatelessWidget {
           hintText: 'Search products, brands...',
           prefixIcon: const Icon(Icons.search_rounded),
           suffixIcon: SizedBox(
-            width: hasQuery ? 132 : 92,
+            width: hasQuery ? 160 : 120,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -194,6 +200,71 @@ class _SearchField extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
+                // Sort button
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Tooltip(
+                    message: 'Sort',
+                    child: PopupMenuButton<_SortOption>(
+                      tooltip: 'Sort',
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.sort_rounded, size: 20),
+                      onSelected: (opt) => onSortChanged?.call(opt),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: _SortOption.relevance,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.filter_list),
+                              const SizedBox(width: 8),
+                              const Text('Relevance'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _SortOption.priceAsc,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.arrow_upward),
+                              const SizedBox(width: 8),
+                              const Text('Price: Low → High'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _SortOption.priceDesc,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.arrow_downward),
+                              const SizedBox(width: 8),
+                              const Text('Price: High → Low'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _SortOption.nameAsc,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.sort_by_alpha),
+                              const SizedBox(width: 8),
+                              const Text('Name: A → Z'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _SortOption.nameDesc,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.sort_by_alpha),
+                              const SizedBox(width: 8),
+                              const Text('Name: Z → A'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 _SuffixIconButton(
                   icon: Icons.tune_rounded,
                   tooltip: 'Advanced search',
@@ -1422,6 +1493,12 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   bool _showCartReminder = true;
   int _activeFilterIndex = 0;
   List<CategorySummary> _latestCategories = const [];
+  // Controller for the main scrollable content so we can programmatically
+  // scroll the dashboard when the user selects a category.
+  final ScrollController _mainScrollController = ScrollController();
+  // Key for the category filter widget so we can ensure it is visible and
+  // pinned to the top when selecting a category.
+  final GlobalKey _categoryFilterKey = GlobalKey();
   int _activeNavIndex = 0;
   String _searchQuery = '';
   // Use ValueNotifier so counts can update independently without rebuilding
@@ -1435,6 +1512,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   bool _notificationsInitialized = false;
   bool _notificationLoading = false;
   String? _notificationError;
+  _SortOption _activeSort = _SortOption.relevance;
 
   // Filters are loaded from the server (categories) at runtime. The UI will
   // construct a local filter list from the categories returned by
@@ -1494,6 +1572,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _searchFocusNode.addListener(_handleSearchFocus);
     _searchController.addListener(_handleSearchTextChanged);
     _promoController.addListener(_handlePromoPosition);
+    // no-op: _mainScrollController is ready to use
     _startPromoAutoScroll();
     _loadCartCount();
     _loadFavoritesCount();
@@ -1738,6 +1817,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     _promoController
       ..removeListener(_handlePromoPosition)
       ..dispose();
+    _mainScrollController.dispose();
     _searchFocusNode
       ..removeListener(_handleSearchFocus)
       ..dispose();
@@ -1751,7 +1831,12 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
   }
 
   void _handleSearchFocus() {
-    setState(() => _isSearchFocused = _searchFocusNode.hasFocus);
+    final hasFocus = _searchFocusNode.hasFocus;
+    setState(() => _isSearchFocused = hasFocus);
+
+    if (hasFocus) {
+      _ensureCategoryFilterVisible();
+    }
   }
 
   void _handleSearchTextChanged() {
@@ -1835,6 +1920,37 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       }).toList();
     }
 
+    // Apply current sort
+    switch (_activeSort) {
+      case _SortOption.relevance:
+        // keep original ordering
+        break;
+      case _SortOption.priceAsc:
+        filtered.sort((a, b) {
+          final aPrice = a.priceCents ?? 0x7fffffff;
+          final bPrice = b.priceCents ?? 0x7fffffff;
+          return aPrice.compareTo(bPrice);
+        });
+        break;
+      case _SortOption.priceDesc:
+        filtered.sort((a, b) {
+          final aPrice = a.priceCents ?? -0x7fffffff;
+          final bPrice = b.priceCents ?? -0x7fffffff;
+          return bPrice.compareTo(aPrice);
+        });
+        break;
+      case _SortOption.nameAsc:
+        filtered.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+        break;
+      case _SortOption.nameDesc:
+        filtered.sort(
+          (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+        );
+        break;
+    }
+
     return filtered;
   }
 
@@ -1843,6 +1959,21 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
     final idx = categories.indexWhere((cat) => cat.id == categoryId);
     if (idx == -1) return 0;
     return idx + 1;
+  }
+
+  String _labelForSort(_SortOption opt) {
+    switch (opt) {
+      case _SortOption.relevance:
+        return 'Relevance';
+      case _SortOption.priceAsc:
+        return 'Price: Low → High';
+      case _SortOption.priceDesc:
+        return 'Price: High → Low';
+      case _SortOption.nameAsc:
+        return 'Name: A → Z';
+      case _SortOption.nameDesc:
+        return 'Name: Z → A';
+    }
   }
 
   List<_PromoBannerData> _promoBannersFrom(List<HomePromo> promos) {
@@ -2024,6 +2155,30 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
       _searchQuery = '';
       _searchController.clear();
     });
+    _ensureCategoryFilterVisible();
+  }
+
+  void _ensureCategoryFilterVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _categoryFilterKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+          alignment: 0.0,
+        );
+        return;
+      }
+
+      if (_mainScrollController.hasClients) {
+        _mainScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   CategorySummary? _findCategoryForIdentifier(String identifier) {
@@ -2155,6 +2310,7 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                     .withValues(alpha: 0.8);
 
                 return SingleChildScrollView(
+                  controller: _mainScrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
@@ -2212,17 +2368,13 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           ),
                         const SizedBox(height: 24),
                         _CategoryFilter(
+                          key: _categoryFilterKey,
                           categories: data.categories,
                           selectedCategoryId: _activeFilterIndex == 0
                               ? null
                               : data.categories[_activeFilterIndex - 1].id,
                           onCategorySelected: (categoryId) {
-                            setState(() {
-                              _activeFilterIndex = _indexForCategory(
-                                categoryId,
-                                data.categories,
-                              );
-                            });
+                            _setCategoryFilter(categoryId);
                           },
                         ),
                         const SizedBox(height: 12),
@@ -2232,6 +2384,10 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                           controller: _searchController,
                           onClear: _clearSearch,
                           onSubmitted: _handleSearchSubmitted,
+                          currentSort: _activeSort,
+                          onSortChanged: (opt) {
+                            setState(() => _activeSort = opt);
+                          },
                           onAdvancedSearch: () async {
                             final selectedCategoryId =
                                 _activeFilterIndex == 0 ||
@@ -2239,36 +2395,211 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
                                         data.categories.length
                                 ? null
                                 : data.categories[_activeFilterIndex - 1].id;
-                            final result = await Navigator.of(context)
-                                .push<SearchResult?>(
-                                  MaterialPageRoute<SearchResult?>(
-                                    builder: (context) => ProductSearchScreen(
-                                      userId: widget.profile.userId,
-                                      categories: data.categories,
-                                      initialQuery: _searchController.text,
-                                      initialCategoryId: selectedCategoryId,
-                                    ),
+
+                            await showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(16),
+                                ),
+                              ),
+                              builder: (context) {
+                                String localQuery = _searchController.text;
+                                String? localCategory = selectedCategoryId;
+                                _SortOption localSort = _activeSort;
+
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: MediaQuery.of(
+                                      context,
+                                    ).viewInsets.bottom,
+                                  ),
+                                  child: StatefulBuilder(
+                                    builder: (context, modalSetState) {
+                                      return SafeArea(
+                                        top: false,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      'Filter & Sort',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .titleMedium
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    onPressed: () =>
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop(),
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              TextField(
+                                                decoration: InputDecoration(
+                                                  hintText:
+                                                      'Search products, brands...',
+                                                  prefixIcon: const Icon(
+                                                    Icons.search,
+                                                  ),
+                                                ),
+                                                controller:
+                                                    TextEditingController.fromValue(
+                                                      TextEditingValue(
+                                                        text: localQuery,
+                                                        selection:
+                                                            TextSelection.collapsed(
+                                                              offset: localQuery
+                                                                  .length,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                onChanged: (v) => modalSetState(
+                                                  () => localQuery = v,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Category',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.labelLarge,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              SizedBox(
+                                                height: 72,
+                                                child: ListView.builder(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  itemCount:
+                                                      data.categories.length +
+                                                      1,
+                                                  itemBuilder: (context, index) {
+                                                    final isAll = index == 0;
+                                                    final cat = isAll
+                                                        ? null
+                                                        : data.categories[index -
+                                                              1];
+                                                    final isSelected = isAll
+                                                        ? localCategory == null
+                                                        : localCategory ==
+                                                              cat!.id;
+                                                    return Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            right: 12,
+                                                          ),
+                                                      child: ChoiceChip(
+                                                        label: Text(
+                                                          isAll
+                                                              ? 'All'
+                                                              : cat!.name,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                        selected: isSelected,
+                                                        onSelected: (_) =>
+                                                            modalSetState(
+                                                              () =>
+                                                                  localCategory =
+                                                                      (isAll
+                                                                      ? null
+                                                                      : cat!.id),
+                                                            ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Sort by',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.labelLarge,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8,
+                                                children: _SortOption.values
+                                                    .map(
+                                                      (opt) => ChoiceChip(
+                                                        label: Text(
+                                                          _labelForSort(opt),
+                                                        ),
+                                                        selected:
+                                                            localSort == opt,
+                                                        onSelected: (_) =>
+                                                            modalSetState(
+                                                              () => localSort =
+                                                                  opt,
+                                                            ),
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.end,
+                                                children: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.of(
+                                                          context,
+                                                        ).pop(),
+                                                    child: const Text('Cancel'),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  FilledButton(
+                                                    onPressed: () {
+                                                      // Apply selections
+                                                      Navigator.of(
+                                                        context,
+                                                      ).pop();
+                                                      setState(() {
+                                                        _searchController.text =
+                                                            localQuery.trim();
+                                                        _searchQuery =
+                                                            localQuery.trim();
+                                                        _activeFilterIndex =
+                                                            _indexForCategory(
+                                                              localCategory,
+                                                              data.categories,
+                                                            );
+                                                        _activeSort = localSort;
+                                                      });
+                                                    },
+                                                    child: const Text('Apply'),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 );
-
-                            if (!mounted) return;
-                            if (result == null) {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                                _activeFilterIndex = 0;
-                              });
-                              return;
-                            }
-
-                            setState(() {
-                              _searchController.text = result.query;
-                              _searchQuery = result.query;
-                              _activeFilterIndex = _indexForCategory(
-                                result.categoryId,
-                                data.categories,
-                              );
-                            });
+                              },
+                            );
                           },
                         ),
 
@@ -2390,10 +2721,11 @@ class _ShopperDashboardState extends State<ShopperDashboard> {
 
 class _CategoryFilter extends StatelessWidget {
   const _CategoryFilter({
+    Key? key,
     required this.categories,
     required this.selectedCategoryId,
     required this.onCategorySelected,
-  });
+  }) : super(key: key);
 
   final List<CategorySummary> categories;
   final String? selectedCategoryId;
@@ -2419,32 +2751,92 @@ class _CategoryFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the 'All' category pinned on the left while the rest scroll.
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
           height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: categories.length + 1, // +1 for "All"
-            itemBuilder: (context, index) {
-              final isAll = index == 0;
-              final category = isAll ? null : categories[index - 1];
-              final isSelected = isAll
-                  ? selectedCategoryId == null
-                  : selectedCategoryId == category?.id;
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Compute left padding so the scrollable list starts after the pinned area
+              const leftMargin = 16.0;
+              const pinnedItemWidth = 70.0; // width of the circular icon
+              const spaceAfterPinned =
+                  8.0; // SizedBox between pinned item and divider
+              const dividerWidth = 2.0;
+              const dividerMargins =
+                  8.0 * 2; // symmetric horizontal margin on divider
+              final pinnedTotal =
+                  leftMargin +
+                  pinnedItemWidth +
+                  spaceAfterPinned +
+                  dividerWidth +
+                  dividerMargins;
 
-              return Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: _CategoryItem(
-                  label: isAll ? 'All' : category!.name,
-                  icon: isAll
-                      ? Icons.grid_view
-                      : _getCategoryIcon(category!.name),
-                  isSelected: isSelected,
-                  onTap: () => onCategorySelected(category?.id),
-                ),
+              return Stack(
+                children: [
+                  // Scrollable categories laid out under the pinned area; add left padding
+                  Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.only(left: pinnedTotal, right: 16),
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: categories.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 16),
+                        itemBuilder: (context, index) {
+                          final category = categories[index];
+                          final isSelected = selectedCategoryId == category.id;
+                          return _CategoryItem(
+                            label: category.name,
+                            icon: _getCategoryIcon(category.name),
+                            isSelected: isSelected,
+                            onTap: () => onCategorySelected(category.id),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+
+                  // Pinned 'All' item + divider overlay
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(width: leftMargin),
+                        _CategoryItem(
+                          label: 'All',
+                          icon: Icons.grid_view,
+                          isSelected: selectedCategoryId == null,
+                          onTap: () => onCategorySelected(null),
+                        ),
+                        const SizedBox(width: spaceAfterPinned),
+                        Container(
+                          width: dividerWidth,
+                          height: 56,
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.outlineVariant.withValues(
+                              alpha: 0.24,
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),
