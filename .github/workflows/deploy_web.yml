@@ -53,6 +53,17 @@ jobs:
       - name: Build web
         run: flutter build web --release
 
+      - name: Adjust base href for GitHub Pages
+        run: |
+          echo "Adjusting base href in build/web/index.html to /JoMarket/"
+          if [ -f build/web/index.html ]; then
+            sed -i 's|<base href="/">|<base href="/JoMarket/">|' build/web/index.html
+            echo "Adjusted base href"
+          else
+            echo "build/web/index.html not found"
+            exit 1
+          fi
+
       - name: Configure Pages
         uses: actions/configure-pages@v4
 
@@ -61,7 +72,4 @@ jobs:
         with:
           publish_dir: ./build/web
           publish_branch: gh-pages
-          # GITHUB_TOKEN is provided automatically by Actions and
-          # is sufficient for pushing to the gh-pages branch when
-          # repository workflow permissions are set to 'Read and write'.
           github_token: ${{ secrets.GITHUB_TOKEN }}
