@@ -12,19 +12,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create .env for CI
+      - name: Create env/.env for CI
         run: |
-          echo "Creating .env for CI"
-          if [ -f .env ]; then
-            echo ".env already exists"
+          echo "Creating env/.env for CI"
+          mkdir -p env
+          if [ -f env/.env ]; then
+            echo "env/.env already exists"
           else
             if [ -n "${{ secrets.SUPABASE_KEY }}" ]; then
-              printf '%s\n' "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" > .env
+              printf '%s\n' "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" > env/.env
             else
-              # Create an empty .env so Flutter asset bundling doesn't fail
-              printf '%s\n' "" > .env
+              # Create an empty env/.env so Flutter asset bundling doesn't fail
+              printf '%s\n' "" > env/.env
             fi
-            echo ".env created"
+            echo "env/.env created"
           fi
 
       - name: Setup Flutter
