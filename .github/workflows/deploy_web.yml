@@ -1,0 +1,75 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches: [ main, chore/migrations-cleanup ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create env/.env for CI
+        run: |
+          echo "Creating env/.env for CI"
+          mkdir -p env
+          if [ -f env/.env ]; then
+            echo "env/.env already exists"
+          else
+            if [ -n "${{ secrets.SUPABASE_KEY }}" ]; then
+              printf '%s\n' "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" > env/.env
+            else
+              # Create an empty env/.env so Flutter asset bundling doesn't fail
+              printf '%s\n' "" > env/.env
+            fi
+            echo "env/.env created"
+          fi
+
+      - name: Ensure root .env exists
+        run: |
+          echo "Ensuring root .env exists"
+          if [ -f .env ]; then
+            echo ".env already exists"
+          else
+            if [ -n "${{ secrets.SUPABASE_KEY }}" ]; then
+              printf '%s\n' "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" > .env
+            else
+              printf '%s\n' "" > .env
+            fi
+            echo ".env created"
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.7'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release
+
+      - name: Adjust base href for GitHub Pages
+        run: |
+          echo "Adjusting base href in build/web/index.html to /JoMarket/"
+          if [ -f build/web/index.html ]; then
+            sed -i 's|<base href="/">|<base href="/JoMarket/">|' build/web/index.html
+            echo "Adjusted base href"
+          else
+            echo "build/web/index.html not found"
+            exit 1
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v4
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          publish_dir: ./build/web
+          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
