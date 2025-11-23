@@ -12,6 +12,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create .env for CI
+        run: |
+          echo "Creating .env for CI"
+          if [ -f .env ]; then
+            echo ".env already exists"
+          else
+            if [ -n "${{ secrets.SUPABASE_KEY }}" ]; then
+              printf '%s\n' "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" > .env
+            else
+              # Create an empty .env so Flutter asset bundling doesn't fail
+              printf '%s\n' "" > .env
+            fi
+            echo ".env created"
+          fi
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
